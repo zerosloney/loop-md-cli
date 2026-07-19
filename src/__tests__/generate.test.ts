@@ -1,0 +1,437 @@
+import { describe, it, beforeEach, afterEach } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+import { generatePlatform } from "../generate.js";
+import { PLATFORMS } from "../platforms.js";
+
+/** 每个测试在独立临时目录运行，彻底隔离。 */
+describe("generatePlatform integration", () => {
+  let tmpDir: string;
+  let originalCwd: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-gen-test-"));
+    process.chdir(tmpDir);
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+  });
+
+  function listFiles(dir: string): string[] {
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir).sort();
+  }
+
+  function readFile(relPath: string): string {
+    return readFileSync(relPath, "utf-8");
+  }
+
+  // ─── Test: invalid platform throws ───
+
+  it("throws on unknown platform", () => {
+    assert.throws(() => generatePlatform("nonexistent-platform"), /未知平台/);
+  });
+
+  // ─── Test: named family (claude) generates correct files ───
+
+  it("named family generates agents and commands with correct frontmatter", () => {
+    const result = generatePlatform("claude");
+
+    assert.equal(result.agents, 3, "expected 3 agents");
+    assert.equal(result.commands, 1, "expected 1 command");
+
+    const agentFiles = listFiles(join(process.cwd(), ".claude/agents"));
+    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+
+    const commandFiles = listFiles(join(process.cwd(), ".claude/commands"));
+    assert.deepEqual(commandFiles, ["loop.md"]);
+
+    const agentContent = readFile(".claude/agents/orchestrator.md");
+    assert.ok(agentContent.startsWith("---"), "agent file should start with frontmatter delimiter");
+    assert.ok(agentContent.includes("name: orchestrator"), "should contain name: orchestrator");
+    assert.ok(agentContent.includes("description:"), "should contain description");
+  });
+
+  // ─── Test: mode family (opencode) generates correct files ───
+
+  it("mode family generates agents and commands with mode-style frontmatter", () => {
+    const result = generatePlatform("opencode");
+
+    assert.equal(result.agents, 3, "expected 3 agents");
+    assert.equal(result.commands, 1, "expected 1 command");
+
+    const agentFiles = listFiles(join(process.cwd(), ".opencode/agents"));
+    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+
+    const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
+    assert.deepEqual(commandFiles, ["loop.md"]);
+
+    const agentContent = readFile(".opencode/agents/orchestrator.md");
+    assert.ok(agentContent.startsWith("---"), "agent file should start with frontmatter delimiter");
+    assert.ok(agentContent.includes("description:"), "mode family should have description");
+    assert.ok(agentContent.includes("mode: subagent"), "should have mode field");
+    assert.ok(agentContent.includes("temperature: 0.3"), "should have temperature field");
+  });
+
+  // ─── Test: codebuddy family generates correct files ───
+
+  it("codebuddy family adds model:inherit and permissionMode", () => {
+    const result = generatePlatform("codebuddy");
+
+    assert.equal(result.agents, 3, "expected 3 agents");
+    assert.equal(result.commands, 1, "expected 1 command");
+
+    // Without domain, agent name is "executor" → permissionMode falls back to "default"
+    const executorContent = readFile(".codebuddy/agents/executor.md");
+    assert.ok(executorContent.includes("model: inherit"), "should have model: inherit");
+    assert.ok(executorContent.includes("permissionMode: default"), "executor should have permissionMode: default");
+
+    // With domain "programming", executor name becomes "code-builder" → permissionMode: acceptEdits
+    generatePlatform("codebuddy", false, ".opencode/templates", "programming");
+    const builderContent = readFile(".codebuddy/agents/code-builder.md");
+    assert.ok(builderContent.includes("permissionMode: acceptEdits"), "code-builder should have permissionMode: acceptEdits");
+    assert.ok(builderContent.includes("model: inherit"), "code-builder should have model: inherit");
+
+    const orchestratorContent = readFile(".codebuddy/agents/code-orchestrator.md");
+    assert.ok(orchestratorContent.includes("permissionMode: default"), "code-orchestrator should have permissionMode: default");
+  });
+
+  // ─── Test: trae family generates correct files ───
+
+  it("trae family generates agents and commands with trae-style frontmatter", () => {
+    const result = generatePlatform("trae");
+
+    assert.equal(result.agents, 3, "expected 3 agents");
+    assert.equal(result.commands, 1, "expected 1 command");
+
+    const agentFiles = listFiles(join(process.cwd(), ".trae/agents"));
+    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+
+    // Trae command should have name field
+    const commandContent = readFile(".trae/commands/loop.md");
+    assert.ok(commandContent.includes("name: loop"), "trae command should have name field");
+  });
+
+  // ─── Test: dry-run mode does not write files ───
+
+  it("dry-run mode does not write any files", () => {
+    // tmp dir is already clean, just verify dry-run behavior
+    const claudeBase = join(process.cwd(), ".claude");
+
+    const result = generatePlatform("claude", true /* dryRun */);
+
+    assert.equal(result.agents, 3, "dry-run should still return agent count");
+    assert.equal(result.commands, 1, "dry-run should still return command count");
+
+    // dry-run creates the directory structure but writes no files
+    assert.ok(existsSync(join(claudeBase, "agents")), "agents dir should exist (mkdir is unconditional)");
+    assert.ok(existsSync(join(claudeBase, "commands")), "commands dir should exist (mkdir is unconditional)");
+
+    // But no actual .md files should be written
+    const agentFiles = listFiles(join(claudeBase, "agents"));
+    const commandFiles = listFiles(join(claudeBase, "commands"));
+    assert.deepEqual(agentFiles, [], "no agent files should be written in dry-run");
+    assert.deepEqual(commandFiles, [], "no command files should be written in dry-run");
+  });
+
+  // ─── Test: domain mode generates domain-specific names ───
+
+  it("domain mode generates agents with domain-specific names (programming)", () => {
+    const result = generatePlatform("claude", false, ".opencode/templates", "programming");
+
+    assert.equal(result.agents, 3, "expected 3 agents for programming domain");
+    assert.equal(result.commands, 1, "expected 1 command for programming domain");
+
+    const agentFiles = listFiles(join(process.cwd(), ".claude/agents"));
+    assert.deepEqual(agentFiles, ["code-builder.md", "code-orchestrator.md", "code-reviewer.md"]);
+
+    const commandFiles = listFiles(join(process.cwd(), ".claude/commands"));
+    assert.deepEqual(commandFiles, ["code-loop.md"]);
+
+    const orchestratorContent = readFile(".claude/agents/code-orchestrator.md");
+    assert.ok(orchestratorContent.includes("name: code-orchestrator"), "should use domain-specific name");
+    assert.ok(
+      orchestratorContent.includes("Code-Loop 主控 Agent"),
+      "should use domain-specific description",
+    );
+  });
+
+  it("domain mode generates test domain correctly", () => {
+    const result = generatePlatform("opencode", false, ".opencode/templates", "testing");
+
+    assert.equal(result.agents, 3, "expected 3 agents for testing domain");
+    assert.equal(result.commands, 1, "expected 1 command for testing domain");
+
+    const agentFiles = listFiles(join(process.cwd(), ".opencode/agents"));
+    assert.deepEqual(agentFiles, ["coverage-reviewer.md", "test-orchestrator.md", "test-writer.md"]);
+
+    const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
+    assert.deepEqual(commandFiles, ["test-loop.md"]);
+  });
+
+  // ─── Test: custom domain file ───
+
+  it("custom domain file from writing domain", () => {
+    const result = generatePlatform("claude", false, ".opencode/templates", "writing");
+
+    assert.equal(result.agents, 3, "expected 3 agents from writing domain");
+    assert.equal(result.commands, 1, "expected 1 command from writing domain");
+
+    const agentFiles = listFiles(join(process.cwd(), ".claude/agents"));
+    assert.deepEqual(agentFiles, ["writing-author.md", "writing-orchestrator.md", "writing-reviewer.md"]);
+  });
+
+  // ─── Test: custom user templates override package templates ───
+
+  it("user templates override package templates", () => {
+    const userTemplatesDir = join(process.cwd(), "custom-templates");
+    const agentsDir = join(userTemplatesDir, "agents");
+    const commandsDir = join(userTemplatesDir, "commands");
+
+    mkdirSync(agentsDir, { recursive: true });
+    mkdirSync(commandsDir, { recursive: true });
+
+    // Write custom templates with a unique marker in the BODY (not frontmatter).
+    // The renderer reconstructs frontmatter from src.name/description, so markers
+    // in the original frontmatter are lost. Markers in the body survive.
+    for (const role of ["orchestrator", "executor", "reviewer"]) {
+      writeFileSync(
+        join(agentsDir, `${role}.md`),
+        [
+          "---",
+          "name: {{name}}",
+          "description: {{description}}",
+          "---",
+          "",
+          "# Custom {{name}} Agent",
+          "MARKER:user-template-override",
+        ].join("\n"),
+        "utf-8",
+      );
+    }
+
+    // Write a minimal loop command template
+    writeFileSync(
+      join(commandsDir, "loop.md"),
+      [
+        "---",
+        "description: {{description}}",
+        "---",
+        "",
+        "# Custom Loop",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    try {
+      const result = generatePlatform("claude", false, "custom-templates");
+
+      assert.equal(result.agents, 3, "expected 3 agents with custom templates");
+
+      const content = readFile(".claude/agents/orchestrator.md");
+      assert.ok(content.includes("MARKER:user-template-override"), "should use user template override in body");
+      assert.ok(content.includes("# Custom orchestrator Agent"), "should use custom body content");
+    } finally {
+      // tmp dir auto-cleans; nothing to do
+    }
+  });
+
+  // ─── Test: all families produce valid frontmatter ───
+
+  it("all platform families produce files starting with ---", () => {
+    const families = Object.keys(PLATFORMS);
+
+    for (const platformKey of families) {
+      generatePlatform(platformKey);
+
+      const dir = PLATFORMS[platformKey].dir;
+      const baseDir = join(process.cwd(), dir);
+
+      const agentFiles = listFiles(join(baseDir, "agents"));
+      for (const file of agentFiles) {
+        const content = readFile(join(baseDir, "agents", file));
+        assert.ok(content.startsWith("---"), `${platformKey}/${file} should start with ---`);
+      }
+
+      const commandFiles = listFiles(join(baseDir, "commands"));
+      for (const file of commandFiles) {
+        const content = readFile(join(baseDir, "commands", file));
+        assert.ok(content.startsWith("---"), `${platformKey}/${file} should start with ---`);
+      }
+    }
+  });
+
+  // ─── Test: named family (omp, qoder) also works ───
+
+  it("omp platform generates correctly", () => {
+    const result = generatePlatform("omp");
+
+    assert.equal(result.agents, 3);
+    assert.equal(result.commands, 1);
+
+    const agentFiles = listFiles(join(process.cwd(), ".omp/agents"));
+    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+  });
+
+  it("qoder platform generates correctly", () => {
+    const result = generatePlatform("qoder");
+
+    assert.equal(result.agents, 3);
+    assert.equal(result.commands, 1);
+
+    const commandFiles = listFiles(join(process.cwd(), ".qoder/commands"));
+    assert.deepEqual(commandFiles, ["loop.md"]);
+  });
+
+  // ─── Test: kilo platform generates correctly ───
+
+  it("kilo platform generates correctly", () => {
+    const result = generatePlatform("kilo");
+
+    assert.equal(result.agents, 3);
+    assert.equal(result.commands, 1);
+
+    const agentFiles = listFiles(join(process.cwd(), ".kilo/agents"));
+    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+  });
+
+  // ─── Test: agent files contain body content from templates ───
+
+  it("generated agent files contain markdown body content", () => {
+    generatePlatform("claude");
+
+    const content = readFile(".claude/agents/orchestrator.md");
+    assert.ok(content.includes("## 角色"), "should contain role section heading");
+    assert.ok(content.includes("Loop 主控 Agent"), "should contain description text");
+  });
+
+  // ─── Test: command files contain markdown body content ───
+
+  it("generated command files contain markdown body content", () => {
+    generatePlatform("opencode");
+
+    const content = readFile(".opencode/commands/loop.md");
+    assert.ok(content.includes("# Loop"), "should contain loop heading");
+  });
+
+  // ─── Test: output directory structure ───
+
+  it("creates both agents and commands subdirectories", () => {
+    generatePlatform("qoder");
+
+    const baseDir = join(process.cwd(), ".qoder");
+    const agentFiles = listFiles(join(baseDir, "agents"));
+    const commandFiles = listFiles(join(baseDir, "commands"));
+
+    assert.ok(agentFiles.length > 0, "should have agent files");
+    assert.ok(commandFiles.length > 0, "should have command files");
+  });
+
+  // ─── Test: domain-specific command names ───
+
+  it("programming domain generates code-loop command", () => {
+    generatePlatform("opencode", false, ".opencode/templates", "programming");
+
+    const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
+    assert.ok(commandFiles.includes("code-loop.md"), "should have code-loop command");
+  });
+
+  it("testing domain generates test-loop command", () => {
+    generatePlatform("opencode", false, ".opencode/templates", "testing");
+
+    const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
+    assert.ok(commandFiles.includes("test-loop.md"), "should have test-loop command");
+  });
+
+  // ─── Test: domain-specific descriptions in output ───
+
+  it("programming domain agents have domain-specific descriptions", () => {
+    generatePlatform("claude", false, ".opencode/templates", "programming");
+
+    const content = readFile(".claude/agents/code-builder.md");
+    assert.ok(content.includes("受控编码与修复的 Builder Agent"), "should have programming domain description");
+  });
+
+  it("testing domain agents have domain-specific descriptions", () => {
+    generatePlatform("claude", false, ".opencode/templates", "testing");
+
+    const content = readFile(".claude/agents/test-writer.md");
+    assert.ok(content.includes("Test-Loop 中唯一可以编写测试代码"), "should have testing domain description");
+  });
+
+  // ─── Test: backpressure 通用化（所有领域都带断路器）───
+
+  it("programming domain orchestrator includes backpressure circuit breaker", () => {
+    generatePlatform("claude", false, ".opencode/templates", "programming");
+
+    const content = readFile(".claude/agents/code-orchestrator.md");
+    assert.ok(content.includes("## 背压（断路器）"), "programming orchestrator should have backpressure section");
+    assert.ok(content.includes("验证命令：`npm test`"), "should use npm test as verification command");
+  });
+
+  it("writing domain uses lint weak-gate backpressure", () => {
+    generatePlatform("claude", false, ".opencode/templates", "writing");
+
+    const content = readFile(".claude/agents/writing-orchestrator.md");
+    assert.ok(content.includes("验证命令：`npm run lint`"), "writing should use lint gate");
+    assert.ok(content.includes("最大失败次数：2"), "writing should allow 2 failures");
+  });
+
+  it("non-orchestrator roles do not get backpressure section", () => {
+    generatePlatform("claude", false, ".opencode/templates", "programming");
+
+    const builder = readFile(".claude/agents/code-builder.md");
+    assert.ok(!builder.includes("## 背压"), "executor should not have backpressure section");
+    const reviewer = readFile(".claude/agents/code-reviewer.md");
+    assert.ok(!reviewer.includes("## 背压"), "reviewer should not have backpressure section");
+  });
+
+  // ─── Test: ralph 领域使用专属模板（任务列表 + 背压熔断范式）───
+
+  it("ralph domain uses dedicated ralph-orchestrator template with TaskList workflow", () => {
+    generatePlatform("claude", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".claude/agents/ralph-orchestrator.md");
+    // ralph 专属范式：任务列表驱动
+    assert.ok(content.includes("TaskList"), "ralph-orchestrator should be task-list driven");
+    assert.ok(content.includes("背压熔断"), "ralph-orchestrator should mention backpressure circuit breaker");
+    assert.ok(content.includes("consecutive_failures"), "ralph should track failure count");
+    // 不应包含 programming 范式的 scope/baseline 概念
+    assert.ok(!content.includes("hard_scope"), "ralph should NOT use programming scope model");
+    assert.ok(!content.includes("声明边界"), "ralph should NOT use programming boundary model");
+    assert.ok(!content.includes("Baseline"), "ralph should NOT use programming baseline model");
+  });
+
+  it("ralph domain executor template differs from programming executor", () => {
+    generatePlatform("claude", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".claude/agents/ralph-worker.md");
+    assert.ok(content.includes("验证命令"), "ralph executor should mention verification command");
+    assert.ok(content.includes("verification"), "ralph executor should output verification field");
+    assert.ok(!content.includes("forbidden_scope"), "ralph executor should NOT reference forbidden_scope");
+  });
+
+  it("ralph domain command uses dedicated ralph-loop template", () => {
+    generatePlatform("claude", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".claude/commands/ralph-loop.md");
+    assert.ok(content.includes("Ralph Orchestrator"), "ralph-loop command should reference Ralph Orchestrator");
+    assert.ok(content.includes("背压熔断"), "ralph-loop should describe circuit breaker workflow");
+    assert.ok(content.includes("max_failures"), "ralph-loop should reference max_failures threshold");
+  });
+
+  it("ralph orchestrator places backpressure prominently (before input section)", () => {
+    generatePlatform("claude", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".claude/agents/ralph-orchestrator.md");
+    const bpIdx = content.indexOf("## 背压（断路器）");
+    const inputIdx = content.indexOf("## 输入");
+    assert.ok(bpIdx > -1 && inputIdx > -1, "both sections must exist");
+    assert.ok(bpIdx < inputIdx, "backpressure should appear before input section (prominent placement)");
+  });
+});
