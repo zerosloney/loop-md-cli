@@ -7,6 +7,10 @@ dist/
 .codebuddy/
 .kilo/
 .omp/
-.opencode/
 .qoder/
 .trae/
+.opencode/agents/
+.opencode/commands/
+
+# Tooling auto-generated (Trellis workflow)
+AGENTS.md

@@ -1,6 +1,11 @@
 /**
- * Agent / Command 注册表。
- * 每项声明 description（渲染到目标平台 frontmatter）；正文与 permission 来自 agents/*.md、commands/*.md。
+ * Agent / Command 角色注册表。
+ *
+ * 通用角色：
+ *   orchestrator / executor / reviewer / loop
+ *
+ * 角色的具体名称/描述由领域（domains.ts）提供；
+ * 无 domain 时使用角色名作为输出文件，描述用此处的默认描述。
  */
 
 export interface AgentMeta {
@@ -12,39 +17,22 @@ export interface CommandMeta {
 }
 
 export const AGENTS: Record<string, AgentMeta> = {
-  "code-orchestrator": {
-    description:
-      "Code-Loop 主控 Agent。规划 scope、维护 loop 元状态、委派 code-builder/code-reviewer，并根据真实门禁决定停止。",
+  orchestrator: {
+    description: "Loop 主控 Agent。规划执行边界、委派执行者/审查者，根据真实门禁决定停止。",
   },
-  "code-builder": {
-    description:
-      "受控编码与修复的 Builder Agent。只在声明 scope 内改代码，按根因分组修复，运行真实验证并把失败原样交回 Orchestrator。",
+  executor: {
+    description: "Loop 执行者 Agent。在声明边界内执行业务产出，按根因分组修改并运行真实验证。",
   },
-  "code-reviewer": {
-    description:
-      "只读审查 Agent。基于本轮 diff、scope baseline 和真实验证结果做语义审查，输出可机器路由的 JSON verdict/issues。按 Orchestrator 注入的 risk_level 自动加强到高风险协议。",
-  },
-  "test-orchestrator": {
-    description:
-      "Test-Loop 主控 Agent。规划测试 scope、维护 loop 元状态、委派 test-writer/coverage-reviewer，并基于覆盖率、变异分数、无效测试与 Reviewer verdict 决定停止。绝不修改被测源码。",
-  },
-  "test-writer": {
-    description:
-      "Test-Loop 中唯一可以编写测试代码的执行者。只在声明 scope 内写测试（hard_scope），运行 test/coverage/变异真实验证，绝不修改被测源码。",
-  },
-  "coverage-reviewer": {
-    description:
-      "Test-Loop 的只读质量阀。基于本轮 diff、scope baseline 和真实验证结果（覆盖率/变异/无效测试）做语义审查，输出可机器路由的 JSON verdict/issues。绝不修改任何代码（测试或被测源码）。",
+  reviewer: {
+    description: "Loop 只读质量阀。复核执行者产出与变更，输出可机器路由的 JSON verdict/issues。",
   },
 };
 
 export const COMMANDS: Record<string, CommandMeta> = {
-  "code-loop": {
-    description:
-      "Builder/Reviewer 编码闭环。用 scope、baseline、真实验证和有限轮次收敛代码修改。",
-  },
-  "test-loop": {
-    description:
-      "Test-Writer/Coverage-Reviewer 测试闭环。用 scope、baseline、覆盖率/变异真实验证和有限轮次收敛测试编写；绝不修改被测源码。",
+  loop: {
+    description: "Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",
   },
 };
+
+export const AGENT_ROLES = Object.keys(AGENTS);
+export const COMMAND_ROLES = Object.keys(COMMANDS);

@@ -7,7 +7,9 @@
     "loop-forge": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "test:build": "tsc",
+    "test": "npm run test:build && node --test dist/__tests__/*.js",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },

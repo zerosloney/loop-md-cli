@@ -32,7 +32,6 @@ export const ROLE_PERMISSION_MODE: Record<string, string> = {
 
 // trae 族 tools（工具名大写；reviewer 只读不给 Bash，参照官方 security-auditor 范式）
 // 留空 = 继承全部工具（不写 tools 字段）
-// 文档: https://docs.trae.cn/ide_subagents
 export const TRAE_TOOLS: Record<string, string> = {
   "code-reviewer": "Read, Glob, Grep", // 只读审查
   "coverage-reviewer": "Read, Glob, Grep",

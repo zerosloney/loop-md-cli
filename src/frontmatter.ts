@@ -12,7 +12,7 @@ export interface Frontmatter {
   [key: string]: string;
 }
 
-const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n/;
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/;
 const TOP_KEY_RE = /^[A-Za-z][\w-]*:/;
 
 /** 从 markdown 文本提取 frontmatter 文本；不匹配返回 null。 */

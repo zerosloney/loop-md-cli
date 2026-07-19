@@ -1,0 +1,27 @@
+{
+  "id": "writing",
+  "agents": [
+    {
+      "role": "orchestrator",
+      "name": "writing-orchestrator",
+      "description": "Writing-Loop 主控 Agent。规划写作边界、维护 loop 元状态、委派 writing-author/writing-reviewer，并根据质量门禁决定停止。"
+    },
+    {
+      "role": "executor",
+      "name": "writing-author",
+      "description": "Writing-Loop 执行者 Agent。只在声明边界内执行业务产出。"
+    },
+    {
+      "role": "reviewer",
+      "name": "writing-reviewer",
+      "description": "Writing-Loop 只读质量阀。基于本轮变更做语义审查，输出 JSON verdict/issues。"
+    }
+  ],
+  "commands": [
+    {
+      "role": "loop",
+      "name": "writing-loop",
+      "description": "Writing-Loop 闭环。用 scope、baseline 和有限轮次收敛写作产出。"
+    }
+  ]
+}

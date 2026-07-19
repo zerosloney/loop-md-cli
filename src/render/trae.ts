@@ -5,7 +5,7 @@
  */
 import { TRAE_TOOLS } from "../roles.js";
 import type { Platform } from "../platforms.js";
-import type { AgentSource, CommandSource } from "../source.js";
+import type { AgentSource, CommandSource } from "./types.js";
 import type { Renderer } from "./types.js";
 import { assemble } from "./types.js";
 
