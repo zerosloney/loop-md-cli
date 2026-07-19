@@ -8,8 +8,9 @@ import { readDomainFile, type ResolvedDomain } from "./domain-schema.js";
 function loadBuiltinDomains(): ResolvedDomain[] {
   return Object.values(DOMAINS).map((d) => ({
     id: d.id,
+    engine: { ...d.engine },
     agents: d.agents.map((a) => ({ role: a.role, name: a.name, description: a.description })),
-    commands: d.commands.map((c) => ({ role: c.role, name: c.name, description: c.description })),
+    commands: d.commands.map((c) => ({ kind: c.kind, agent: c.agent, name: c.name, description: c.description })),
     backpressure: d.backpressure,
   }));
 }

@@ -1,19 +1,28 @@
 /**
  * 领域文件 Schema 深度校验。
  *
- * 在 readDomainFile 的基础上增加结构化约束：
+ * 领域 schema 体现三层概念：
+ *
+ *   engine        — 领域采用的工程范式（当前仅支持 loop = 循环工程设计）
+ *   agents        — 三角色 worker（orchestrator / executor / reviewer）
+ *   commands      — engine 的入口触发器（kind="entry"），每个 command 必填 agent 字段
+ *                   显式声明驱动哪个 worker（告别按 -loop 后缀硬拆）
+ *
+ * 校验规则：
  *   - id: 非空字符串
- *   - agents[].role: 必须是已知角色（orchestrator/executor/reviewer）
+ *   - engine.type: 必填，必须是 "loop"
+ *   - agents[].role: 必须是已知 agent 角色（orchestrator/executor/reviewer）
  *   - agents[].name, description: 非空字符串
- *   - commands[].role: 必须是已知角色（loop）
+ *   - commands[].kind: 必填，必须是 "entry"
+ *   - commands[].agent: 必填，必须引用已存在的 agents[].name
  *   - commands[].name, description: 非空字符串
- *   - backpressure: 可选，断路器配置
+ *   - backpressure: 可选，断路器配置（domain 顶层）
  *   - 同一集合内 name 不重复
- *   - 至少包含一个 orchestrator 和一个 loop 命令
+ *   - 至少包含一个 orchestrator 和一个 entry 命令
  */
 
 import { readFileSync } from "node:fs";
-import { AGENT_ROLES, COMMAND_ROLES } from "./registry.js";
+import { AGENT_ROLES, ENGINE_TYPES, COMMAND_KINDS } from "./registry.js";
 
 export interface BackpressureConfig {
   type: "test" | "lint" | "custom";
@@ -22,10 +31,16 @@ export interface BackpressureConfig {
   retry_on_failure?: boolean;
 }
 
+/** 领域采用的工程范式。当前仅支持 loop = 循环工程设计。 */
+export interface EngineConfig {
+  type: "loop";
+}
+
 export interface ResolvedDomain {
   id: string;
+  engine: EngineConfig;
   agents: { role: string; name: string; description: string }[];
-  commands: { role: string; name: string; description: string }[];
+  commands: { kind: string; agent: string; name: string; description: string }[];
   backpressure?: BackpressureConfig;
 }
 
@@ -50,11 +65,27 @@ export function validateDomainFields(domain: unknown): FieldError[] {
     errors.push({ field: "id", message: "必须是非空字符串" });
   }
 
+  // ── engine（必填，领域工程范式） ──
+  if (obj.engine === undefined) {
+    errors.push({ field: "engine", message: "必填，领域采用的工程范式" });
+  } else if (typeof obj.engine !== "object" || obj.engine === null || Array.isArray(obj.engine)) {
+    errors.push({ field: "engine", message: "必须是对象" });
+  } else {
+    const engine = obj.engine as Record<string, unknown>;
+    if (typeof engine.type !== "string" || !ENGINE_TYPES.includes(engine.type as "loop")) {
+      errors.push({
+        field: "engine.type",
+        message: `必填，必须是 ${ENGINE_TYPES.join(" | ")}`,
+      });
+    }
+  }
+
   // ── agents ──
+  // 提前收集 agent names，供 commands[].agent 引用校验
+  const agentNames = new Set<string>();
   if (!Array.isArray(obj.agents)) {
     errors.push({ field: "agents", message: "必须是数组" });
   } else {
-    const agentNames = new Set<string>();
     const hasOrchestrator = obj.agents.some((a: unknown) => {
       if (typeof a !== "object" || a === null) return false;
       const agent = a as Record<string, unknown>;
@@ -105,10 +136,10 @@ export function validateDomainFields(domain: unknown): FieldError[] {
     errors.push({ field: "commands", message: "必须是数组" });
   } else {
     const commandNames = new Set<string>();
-    const hasLoop = obj.commands.some((c: unknown) => {
+    const hasEntry = obj.commands.some((c: unknown) => {
       if (typeof c !== "object" || c === null) return false;
       const cmd = c as Record<string, unknown>;
-      return cmd.role === "loop";
+      return cmd.kind === "entry";
     });
 
     for (let i = 0; i < obj.commands.length; i++) {
@@ -122,11 +153,21 @@ export function validateDomainFields(domain: unknown): FieldError[] {
 
       const c = cmd as Record<string, unknown>;
 
-      // role
-      if (typeof c.role !== "string" || !COMMAND_ROLES.includes(c.role)) {
+      // kind（engine 入口类型；与 agent 的 role 是不同 vocabulary）
+      if (typeof c.kind !== "string" || !COMMAND_KINDS.includes(c.kind)) {
         errors.push({
-          field: `${prefix}.role`,
-          message: `必须是已知角色之一: ${COMMAND_ROLES.join(", ")}`,
+          field: `${prefix}.kind`,
+          message: `必填，必须是 ${COMMAND_KINDS.join(" | ")}`,
+        });
+      }
+
+      // agent（必填，显式声明驱动哪个 worker；引用 agents[].name）
+      if (typeof c.agent !== "string" || c.agent.trim() === "") {
+        errors.push({ field: `${prefix}.agent`, message: "必填，必须引用已存在的 agents[].name" });
+      } else if (agentNames.size > 0 && !agentNames.has(c.agent)) {
+        errors.push({
+          field: `${prefix}.agent`,
+          message: `"${c.agent}" 在 agents 中不存在`,
         });
       }
 
@@ -145,8 +186,8 @@ export function validateDomainFields(domain: unknown): FieldError[] {
       }
     }
 
-    if (!hasLoop) {
-      errors.push({ field: "commands", message: "必须至少包含一个 role=loop 的命令" });
+    if (!hasEntry) {
+      errors.push({ field: "commands", message: "必须至少包含一个 kind=entry 的命令" });
     }
   }
 
@@ -195,8 +236,10 @@ export function readDomainFile(path: string): ResolvedDomain {
 
   // 类型断言已通过校验
   const obj = json as Record<string, unknown>;
+  const engineObj = obj.engine as Record<string, unknown>;
   const domain: ResolvedDomain = {
     id: obj.id as string,
+    engine: { type: engineObj.type as "loop" },
     agents: (obj.agents as unknown[]).map((a) => {
       const agent = a as Record<string, unknown>;
       return {
@@ -208,7 +251,8 @@ export function readDomainFile(path: string): ResolvedDomain {
     commands: (obj.commands as unknown[]).map((c) => {
       const cmd = c as Record<string, unknown>;
       return {
-        role: cmd.role as string,
+        kind: cmd.kind as string,
+        agent: cmd.agent as string,
         name: cmd.name as string,
         description: cmd.description as string,
       };

@@ -3,12 +3,16 @@
  *
  * 导出内部渲染管线供 validate.ts 复用，避免双重实现导致的不一致。
  * 支持增量模式：仅重写内容变化的文件。
+ *
+ * 概念分层：
+ *   engine.type (= "loop") → 决定 command 模板 lookup 域
+ *   commands[].agent       → 决定 command 模板里 {{agent}} 的取值
  */
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { PLATFORMS, type Family, type Platform } from "./platforms.js";
-import { AGENTS, COMMANDS, AGENT_ROLES, COMMAND_ROLES } from "./registry.js";
+import { AGENTS, COMMANDS, AGENT_ROLES, ENGINE_TYPES } from "./registry.js";
 import { loadAgentTemplates, loadCommandTemplates, loadTemplateFiles, renderTemplate } from "./template.js";
 import { parseSource } from "./frontmatter.js";
 import { resolveDomains, findDomain } from "./domain-loader.js";
@@ -24,6 +28,7 @@ import {
   applyChanges,
   type Manifest,
 } from "./incremental.js";
+import type { BackpressureConfig, ResolvedDomain } from "./domain-schema.js";
 
 const DEFAULT_TEMPLATES_ROOT = ".opencode/templates";
 
@@ -46,16 +51,48 @@ export interface RenderedCommand {
   content: string;
 }
 
-interface SourceEntry {
+interface AgentSourceEntry {
   role: string;
   key: string;
   description: string;
-  backpressure?: import("./domain-schema.js").BackpressureConfig;
+}
+
+interface CommandSourceEntry {
+  /** 模板 lookup key（即 engine.type，例如 "loop"）。 */
+  engineType: string;
+  key: string;
+  description: string;
+  /** command 模板里 {{agent}} 的取值（command.agent 显式声明）。 */
+  agent: string;
+}
+
+// ── 默认领域（无 domain 模式） ──
+
+/**
+ * 无 domain 时使用的"虚拟"领域：engine=loop + 三角色 + 单个 entry 命令。
+ * 让 generate/validate 在无 domain 路径下也能拿到完整的 ResolvedDomain。
+ */
+function defaultDomain(): ResolvedDomain {
+  return {
+    id: "__default__",
+    engine: { type: "loop" },
+    agents: AGENT_ROLES.map((role) => ({
+      role,
+      name: role,
+      description: AGENTS[role].description,
+    })),
+    commands: [
+      {
+        kind: "entry",
+        agent: "orchestrator",
+        name: "loop",
+        description: COMMANDS.loop.description,
+      },
+    ],
+  };
 }
 
 // ── Backpressure 渲染 ──
-
-import type { BackpressureConfig } from "./domain-schema.js";
 
 /** 把 backpressure 配置渲染成 markdown 段落；空配置返回空字符串。 */
 export function renderBackpressure(bp: BackpressureConfig | undefined): string {
@@ -110,9 +147,11 @@ export function renderCommand(
   platformKey: string,
   commandName: string,
   description: string,
+  agentName: string,
   templatesRoot = DEFAULT_TEMPLATES_ROOT,
   cwd = process.cwd(),
   domainId?: string,
+  engineType?: string,
 ): RenderedCommand {
   const platform: Platform = PLATFORMS[platformKey];
   if (!platform) throw new Error(`未知平台: ${platformKey}`);
@@ -123,14 +162,14 @@ export function renderCommand(
   const pkgCommandTemplates = loadCommandTemplates();
   const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
 
-  const role = findCommandRole(commandName);
-  const tpl = pickTemplate(commandTemplates, domainId, role);
-  if (!tpl) throw new Error(`未找到命令模板: ${role}`);
+  // lookup key：domainId-specific 优先（`<domainId>-<engineType>`），回退到 `<engineType>`
+  // 例如 ralph 领域 → ralph-loop.md；其他领域 → loop.md
+  // 无 engineType 时回退到默认引擎（当前唯一 loop）
+  const effectiveEngineType = engineType ?? ENGINE_TYPES[0];
+  const tpl = pickCommandTemplate(commandTemplates, domainId, effectiveEngineType);
+  if (!tpl) throw new Error(`未找到命令模板: engine.type=${effectiveEngineType}${domainId ? ` (domain=${domainId})` : ""}`);
 
-  const commandAgent = commandName.endsWith("-loop")
-    ? `${commandName.slice(0, -5)}-orchestrator`
-    : `${commandName}-orchestrator`;
-  const rendered = renderTemplate(tpl, { name: commandName, description, agent: commandAgent });
+  const rendered = renderTemplate(tpl, { name: commandName, description, agent: agentName });
   const { frontmatter, body } = parseSource(rendered);
   const src: CommandSource = { name: commandName, description, frontmatter, body };
   const content = renderer.renderCommand(src, platform);
@@ -151,14 +190,8 @@ function findAgentRole(name: string): string {
   return "orchestrator";
 }
 
-function findCommandRole(name: string): string {
-  if (name === "loop") return "loop";
-  if (name.includes("-loop")) return "loop";
-  return "loop";
-}
-
 /**
- * 按领域优先级挑选模板：先查 `<domainId>-<role>`（如 `ralph-orchestrator`），
+ * 按领域优先级挑选 agent 模板：先查 `<domainId>-<role>`（如 `ralph-orchestrator`），
  * 找不到再回退到通用 `<role>`（如 `orchestrator`）。
  *
  * 这样 ralph 这类有专属工作流的领域可以用独立模板，其他领域共享通用模板。
@@ -173,6 +206,21 @@ function pickTemplate(
     if (specific) return specific;
   }
   return templates[role];
+}
+
+/**
+ * 选 command 模板：先 `<domainId>-<engineType>`（如 `ralph-loop`），回退到 `<engineType>`（如 `loop`）。
+ */
+function pickCommandTemplate(
+  templates: Record<string, string>,
+  domainId: string | undefined,
+  engineType: string,
+): string | undefined {
+  if (domainId) {
+    const specific = templates[`${domainId}-${engineType}`];
+    if (specific) return specific;
+  }
+  return templates[engineType];
 }
 
 // ── 生成编排 ──
@@ -209,24 +257,25 @@ export function generatePlatform(
   const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
 
   const resolvedDomains = resolveDomains(domainFiles);
-  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : undefined;
+  // 无 domain 时使用默认虚拟领域，统一走 ResolvedDomain 路径
+  const resolvedDomain: ResolvedDomain = domain
+    ? findDomain(resolvedDomains, domain)
+    : defaultDomain();
 
   // 收集所有预期文件
   const expectedFiles = new Map<string, string>();
   let agentCount = 0;
-  const agentEntries: SourceEntry[] = resolvedDomain
-    ? resolvedDomain.agents.map((a) => ({ role: a.role, key: a.name, description: a.description }))
-    : AGENT_ROLES.map((role) => ({
-        role,
-        key: AGENTS[role].description ? role : role,
-        description: AGENTS[role].description,
-      }));
+  const agentEntries: AgentSourceEntry[] = resolvedDomain.agents.map((a) => ({
+    role: a.role,
+    key: a.name,
+    description: a.description,
+  }));
 
   for (const { role, key, description } of agentEntries) {
-    const tpl = pickTemplate(agentTemplates, resolvedDomain?.id, role);
+    const tpl = pickTemplate(agentTemplates, resolvedDomain.id === "__default__" ? undefined : resolvedDomain.id, role);
     if (!tpl) continue;
     // orchestrator 角色注入 backpressure 段；其他角色传空
-    const backpressureText = role === "orchestrator" ? renderBackpressure(resolvedDomain?.backpressure) : "";
+    const backpressureText = role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
     const rendered = renderTemplate(tpl, { name: key, description, backpressure: backpressureText });
     const { frontmatter, body } = parseSource(rendered);
     const src: AgentSource = { name: key, description, frontmatter, body };
@@ -237,19 +286,21 @@ export function generatePlatform(
   }
 
   let commandCount = 0;
-  const commandEntries: SourceEntry[] = resolvedDomain
-    ? resolvedDomain.commands.map((c) => ({ role: c.role, key: c.name, description: c.description }))
-    : COMMAND_ROLES.map((role) => ({
-        role,
-        key: role,
-        description: COMMANDS[role].description,
-      }));
+  const commandEntries: CommandSourceEntry[] = resolvedDomain.commands.map((c) => ({
+    engineType: resolvedDomain.engine.type,
+    key: c.name,
+    description: c.description,
+    agent: c.agent,
+  }));
 
-  for (const { role, key, description } of commandEntries) {
-    const tpl = pickTemplate(commandTemplates, resolvedDomain?.id, role);
+  for (const { engineType, key, description, agent } of commandEntries) {
+    const tpl = pickCommandTemplate(
+      commandTemplates,
+      resolvedDomain.id === "__default__" ? undefined : resolvedDomain.id,
+      engineType,
+    );
     if (!tpl) continue;
-    const commandAgent = key.endsWith("-loop") ? `${key.slice(0, -5)}-orchestrator` : `${key}-orchestrator`;
-    const rendered = renderTemplate(tpl, { name: key, description, agent: commandAgent });
+    const rendered = renderTemplate(tpl, { name: key, description, agent });
     const { frontmatter, body } = parseSource(rendered);
     const src: CommandSource = { name: key, description, frontmatter, body };
     const out = renderer.renderCommand(src, platform);

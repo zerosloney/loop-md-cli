@@ -78,7 +78,12 @@ export function validatePlatform(
   const commandsDir = join(base, "commands");
 
   const resolvedDomains = resolveDomains(domainFiles);
-  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : undefined;
+  // 无 domain 时用默认虚拟领域（与 generate.ts 的 defaultDomain 同步）：
+  // renderDomainId 传 undefined，renderedCommand 时 engineType 显式给 "loop"。
+  // 这里用 null 表示"无领域"分支，让两个路径走相同的渲染调用样式。
+  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : null;
+  // 实际渲染用的领域 id（无 domain 时传 undefined，让模板用通用版本）
+  const renderDomainId = resolvedDomain?.id === "__default__" ? undefined : resolvedDomain?.id;
 
   const issues: FileIssue[] = [];
 
@@ -90,7 +95,7 @@ export function validatePlatform(
   if (resolvedDomain) {
     for (const a of resolvedDomain.agents) {
       const agentBp = a.role === "orchestrator" ? bpText : "";
-      expectedAgents.push(renderAgent(platformKey, a.name, a.description, a.role, templatesRoot, cwd, resolvedDomain.id, agentBp));
+      expectedAgents.push(renderAgent(platformKey, a.name, a.description, a.role, templatesRoot, cwd, renderDomainId, agentBp));
     }
   } else {
     // 无 domain 时使用角色名作为名称
@@ -108,10 +113,15 @@ export function validatePlatform(
   const expectedCommands: RenderedCommand[] = [];
   if (resolvedDomain) {
     for (const c of resolvedDomain.commands) {
-      expectedCommands.push(renderCommand(platformKey, c.name, c.description, templatesRoot, cwd, resolvedDomain.id));
+      expectedCommands.push(
+        renderCommand(platformKey, c.name, c.description, c.agent, templatesRoot, cwd, renderDomainId, resolvedDomain.engine.type),
+      );
     }
   } else {
-    expectedCommands.push(renderCommand(platformKey, "loop", "Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。", templatesRoot, cwd));
+    // 无 domain 时使用默认 command (loop 入口 → orchestrator)
+    expectedCommands.push(
+      renderCommand(platformKey, "loop", "Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。", "orchestrator", templatesRoot, cwd),
+    );
   }
 
   // ── 扫描磁盘 agent 文件 ──

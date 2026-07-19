@@ -1,35 +1,41 @@
 /**
- * 领域注册表：将通用角色映射到领域具体文件与描述。
+ * 领域注册表：将通用工程范式（engine）+ 三角色 + 命令入口，映射到领域具体文件与描述。
  *
- * 内置领域：
- *   programming → code-orchestrator / code-builder / code-reviewer / code-loop
- *   testing     → test-orchestrator / test-writer / coverage-reviewer / test-loop
- *   writing     → writing-orchestrator / writing-author / writing-reviewer / writing-loop
- *   ralph       → ralph-orchestrator / ralph-worker / ralph-reviewer / ralph-loop
+ * 内置领域（全部采用 loop 引擎范式）：
+ *   programming → code-orchestrator / code-builder / code-reviewer / code-loop (→code-orchestrator)
+ *   testing     → test-orchestrator / test-writer / coverage-reviewer / test-loop (→test-orchestrator)
+ *   writing     → writing-orchestrator / writing-author / writing-reviewer / writing-loop (→writing-orchestrator)
+ *   ralph       → ralph-orchestrator / ralph-worker / ralph-reviewer / ralph-loop (→ralph-orchestrator)
  *
  * ralph 是内核范式（任务列表驱动 + 背压熔断），有自己的专属模板
- * （src/templates/agents/ralph-*.md）；programming/testing/writing 基于 ralph
- * 内核演化为特定领域，使用通用模板。
+ * （src/templates/agents/ralph-*.md / src/templates/commands/ralph-loop.md）；
+ * programming/testing/writing 基于 ralph 内核演化为特定领域，使用通用模板。
  *
  * backpressure（断路器）是通用内核能力，所有内置领域默认携带：
  *   programming / testing / ralph → npm test, max_failures=3
  *   writing                      → npm run lint, max_failures=2（弱门禁）
  *
+ * 每个 command 必填 agent 字段，显式声明驱动哪个 worker（告别按 -loop 后缀硬拆）。
+ *
  * 自定义领域：通过代码扩展 DOMAINS，或通过 --domain-file 传入 JSON。
  */
 
-import type { BackpressureConfig } from "./domain-schema.js";
+import type { BackpressureConfig, EngineConfig } from "./domain-schema.js";
 
 export interface Domain {
   id: string;
+  engine: EngineConfig;
   agents: { role: string; name: string; description: string }[];
-  commands: { role: string; name: string; description: string }[];
+  commands: { kind: string; agent: string; name: string; description: string }[];
   backpressure?: BackpressureConfig;
 }
+
+const LOOP_ENGINE: EngineConfig = { type: "loop" };
 
 export const DOMAINS: Record<string, Domain> = {
   programming: {
     id: "programming",
+    engine: LOOP_ENGINE,
     agents: [
       {
         role: "orchestrator",
@@ -52,7 +58,8 @@ export const DOMAINS: Record<string, Domain> = {
     ],
     commands: [
       {
-        role: "loop",
+        kind: "entry",
+        agent: "code-orchestrator",
         name: "code-loop",
         description:
           "Builder/Reviewer 编码闭环。用 scope、baseline、真实验证和有限轮次收敛代码修改。",
@@ -67,6 +74,7 @@ export const DOMAINS: Record<string, Domain> = {
   },
   testing: {
     id: "testing",
+    engine: LOOP_ENGINE,
     agents: [
       {
         role: "orchestrator",
@@ -89,7 +97,8 @@ export const DOMAINS: Record<string, Domain> = {
     ],
     commands: [
       {
-        role: "loop",
+        kind: "entry",
+        agent: "test-orchestrator",
         name: "test-loop",
         description:
           "Test-Writer/Coverage-Reviewer 测试闭环。用 scope、baseline、覆盖率/变异真实验证和有限轮次收敛测试编写；绝不修改被测源码。",
@@ -104,6 +113,7 @@ export const DOMAINS: Record<string, Domain> = {
   },
   writing: {
     id: "writing",
+    engine: LOOP_ENGINE,
     agents: [
       {
         role: "orchestrator",
@@ -126,7 +136,8 @@ export const DOMAINS: Record<string, Domain> = {
     ],
     commands: [
       {
-        role: "loop",
+        kind: "entry",
+        agent: "writing-orchestrator",
         name: "writing-loop",
         description:
           "Writing-Loop 闭环。用 scope、baseline 和有限轮次收敛写作产出。",
@@ -141,6 +152,7 @@ export const DOMAINS: Record<string, Domain> = {
   },
   ralph: {
     id: "ralph",
+    engine: LOOP_ENGINE,
     agents: [
       {
         role: "orchestrator",
@@ -163,7 +175,8 @@ export const DOMAINS: Record<string, Domain> = {
     ],
     commands: [
       {
-        role: "loop",
+        kind: "entry",
+        agent: "ralph-orchestrator",
         name: "ralph-loop",
         description:
           "Ralph Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",

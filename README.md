@@ -80,6 +80,25 @@ loop-forge --claude --domain ralph
 > 它有专属模板（`src/templates/agents/ralph-*.md`），与 programming/testing 的 scope/baseline 范式在结构上明显区分。
 > `backpressure`（断路器）是通用内核能力，所有内置领域默认携带；`programming` / `testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
 
+### 概念分层：Engine 三层架构
+
+> **重要区分**：`loop` **不是**与 `orchestrator / executor / reviewer` 平级的"第四个角色"，而是"循环工程设计"这种**领域工程范式**的标识。
+>
+> 领域 schema 分三层，对应三种不同的工程概念：
+>
+> | 层级 | 字段 | 取值 | 含义 |
+> |------|------|------|------|
+> | Engine 层 | `engine.type` | `"loop"` | 领域采用的工程范式（当前唯一支持"循环工程设计"） |
+> | Agent 层 | `agents[].role` | `orchestrator / executor / reviewer` | 三角色 worker 分类 |
+> | Command 层 | `commands[].kind` | `"entry"` | engine 入口触发器；`commands[].agent` 必填，显式声明驱动哪个 worker |
+>
+> 协作链路：用户 → `/entry` (command) → `commands[].agent` 引用的 orchestrator → executor + reviewer
+>
+> 关键约束：
+> - 每个领域必填 `engine: { type: "loop" }`（明确"我们用循环工程设计"）
+> - 每个 command 必填 `agent` 字段（告别按 `-loop` 后缀硬拆；命令名与 agent 名解耦）
+> - 模板里的 `{{agent}}` 占位符直接绑定 `command.agent` 的值
+
 ### 自定义领域
 
 通过 `--domain-file` 传入自定义领域 JSON 文件：
@@ -87,6 +106,7 @@ loop-forge --claude --domain ralph
 ```json
 {
   "id": "my-domain",
+  "engine": { "type": "loop" },
   "agents": [
     {
       "role": "orchestrator",
@@ -106,7 +126,8 @@ loop-forge --claude --domain ralph
   ],
   "commands": [
     {
-      "role": "loop",
+      "kind": "entry",
+      "agent": "my-orchestrator",
       "name": "my-loop",
       "description": "闭环命令..."
     }

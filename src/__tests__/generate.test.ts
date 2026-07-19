@@ -434,4 +434,41 @@ describe("generatePlatform integration", () => {
     assert.ok(bpIdx > -1 && inputIdx > -1, "both sections must exist");
     assert.ok(bpIdx < inputIdx, "backpressure should appear before input section (prominent placement)");
   });
+
+  // ─── Test: L3 — command {{agent}} comes from command.agent (no suffix derivation) ───
+
+  it("domain command's {{agent}} placeholder binds to command.agent (L3)", () => {
+    // testing domain: command "test-loop" should bind to "test-orchestrator" (via command.agent)
+    generatePlatform("opencode", false, ".opencode/templates", "testing");
+
+    const content = readFile(".opencode/commands/test-loop.md");
+    assert.ok(
+      content.includes("agent: test-orchestrator"),
+      "command should bind to its declared agent, not derive from name",
+    );
+    // 反例：旧 -loop 后缀派生会得到 "test-orchestrator"（巧合）
+    // 这里验证显式声明路径，ralph 领域反过来就能区分：
+    // ralph-loop 的 command.agent = "ralph-orchestrator"
+  });
+
+  it("ralph command binds via command.agent not by -loop suffix derivation", () => {
+    // ralph 领域：command = "ralph-loop", command.agent = "ralph-orchestrator"
+    // 用 opencode 平台（mode 族，frontmatter 含 agent 字段）测 {{agent}} 取值
+    generatePlatform("opencode", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".opencode/commands/ralph-loop.md");
+    assert.ok(content.includes("agent: ralph-orchestrator"), "should bind to ralph-orchestrator via command.agent");
+  });
+
+  it("default (no domain) command binds to orchestrator via default domain", () => {
+    // 无 domain 时：defaultDomain 提供 { kind: "entry", agent: "orchestrator", name: "loop" }
+    // 用 opencode 平台（mode 族）测 {{agent}} 取值
+    generatePlatform("opencode", false, ".opencode/templates");
+
+    const content = readFile(".opencode/commands/loop.md");
+    assert.ok(
+      content.includes("agent: orchestrator"),
+      "default command should bind to orchestrator via defaultDomain",
+    );
+  });
 });
