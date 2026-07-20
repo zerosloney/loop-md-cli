@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 import { PLATFORMS, type Platform } from "./platforms.js";
 import { resolveDomains, findDomain } from "./domain-loader.js";
-import { renderAgent, renderCommand, renderBackpressure, type RenderedAgent, type RenderedCommand } from "./generate.js";
+import { renderAgent, renderCommand, renderBackpressure, defaultDomain, type RenderedAgent, type RenderedCommand } from "./generate.js";
 
 // ── 验证结果 ──
 
@@ -78,49 +78,27 @@ export function validatePlatform(
   const commandsDir = join(base, "commands");
 
   const resolvedDomains = resolveDomains(domainFiles, cwd);
-  // 无 domain 时用默认虚拟领域（与 generate.ts 的 defaultDomain 同步）：
-  // renderDomainId 传 undefined，renderedCommand 时 engineType 显式给 "loop"。
-  // 这里用 null 表示"无领域"分支，让两个路径走相同的渲染调用样式。
-  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : null;
-  // 实际渲染用的领域 id（无 domain 时传 undefined，让模板用通用版本）
-  const renderDomainId = resolvedDomain?.id === "__default__" ? undefined : resolvedDomain?.id;
+  // 无 domain 时复用 generate.ts 的 defaultDomain()（单一真相源），避免两路硬编码描述漂移。
+  // 渲染时 renderDomainId 传 undefined（__default__ id 只用于内部识别，不参与模板 lookup）。
+  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : defaultDomain();
+  const renderDomainId = resolvedDomain.id === "__default__" ? undefined : resolvedDomain.id;
 
   const issues: FileIssue[] = [];
 
   // ── 生成预期 agent 列表 ──
   // 注意：渲染必须与 generate.ts 的 generatePlatform 完全一致，包括 backpressure 注入，
   // 否则 validate 会误报 stale。orchestrator 角色注入断路器段，其他角色传空。
-  const bpText = renderBackpressure(resolvedDomain?.backpressure);
+  const bpText = renderBackpressure(resolvedDomain.backpressure);
   const expectedAgents: RenderedAgent[] = [];
-  if (resolvedDomain) {
-    for (const a of resolvedDomain.agents) {
-      const agentBp = a.role === "orchestrator" ? bpText : "";
-      expectedAgents.push(renderAgent(platformKey, a.name, a.description, a.role, templatesRoot, cwd, renderDomainId, agentBp));
-    }
-  } else {
-    // 无 domain 时使用角色名作为名称
-    const agentRoles = ["orchestrator", "executor", "reviewer"];
-    for (const role of agentRoles) {
-      const desc = role === "orchestrator"
-        ? "Loop 主控 Agent。规划执行边界、委派执行者/审查者，根据真实门禁决定停止。"
-        : role === "executor"
-          ? "Loop 执行者 Agent。在声明边界内执行业务产出，按根因分组修改并运行真实验证。"
-          : "Loop 只读质量阀。复核执行者产出与变更，输出可机器路由的 JSON verdict/issues。";
-      expectedAgents.push(renderAgent(platformKey, role, desc, undefined, templatesRoot, cwd));
-    }
+  for (const a of resolvedDomain.agents) {
+    const agentBp = a.role === "orchestrator" ? bpText : "";
+    expectedAgents.push(renderAgent(platformKey, a.name, a.description, a.role, templatesRoot, cwd, renderDomainId, agentBp));
   }
 
   const expectedCommands: RenderedCommand[] = [];
-  if (resolvedDomain) {
-    for (const c of resolvedDomain.commands) {
-      expectedCommands.push(
-        renderCommand(platformKey, c.name, c.description, c.agent, templatesRoot, cwd, renderDomainId, resolvedDomain.engine.type),
-      );
-    }
-  } else {
-    // 无 domain 时使用默认 command (loop 入口 → orchestrator)
+  for (const c of resolvedDomain.commands) {
     expectedCommands.push(
-      renderCommand(platformKey, "loop", "Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。", "orchestrator", templatesRoot, cwd),
+      renderCommand(platformKey, c.name, c.description, c.agent, templatesRoot, cwd, renderDomainId, resolvedDomain.engine.type),
     );
   }
 

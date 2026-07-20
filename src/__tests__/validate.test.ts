@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { validatePlatform, formatValidateResult } from "../validate.js";
-import { generatePlatform } from "../generate.js";
+import { generatePlatform, defaultDomain } from "../generate.js";
+import { AGENTS, COMMANDS } from "../registry.js";
 
 // ─── Core validation logic tests ───
 
@@ -104,5 +105,41 @@ describe("formatValidateResult", () => {
     };
     const output = formatValidateResult(result);
     assert.ok(output.includes("多余"));
+  });
+});
+
+// ─── 缺陷 E 回归：defaultDomain 与 AGENTS/COMMANDS 单一真相源同步 ───
+// 旧实现 validate.ts 硬编码了一份描述，与 generate.ts 的 defaultDomain 各自维护。
+// 现在两路都复用 generate.ts 导出的 defaultDomain()，描述统一从 registry 取。
+// 这条测试确保未来有人改 registry 的描述时，defaultDomain 自动跟随——
+// 如果有人重新引入硬编码分支，测试会立即失败。
+describe("defaultDomain (single source of truth)", () => {
+  it("agent descriptions match AGENTS registry", () => {
+    const d = defaultDomain();
+    for (const a of d.agents) {
+      assert.equal(
+        a.description,
+        AGENTS[a.role].description,
+        `defaultDomain agent "${a.name}" description must match AGENTS["${a.role}"]`,
+      );
+    }
+  });
+
+  it("command description matches COMMANDS registry", () => {
+    const d = defaultDomain();
+    for (const c of d.commands) {
+      // defaultDomain 的 command name 是 "loop"，对应 COMMANDS.loop
+      assert.equal(
+        c.description,
+        COMMANDS.loop.description,
+        "defaultDomain loop command description must match COMMANDS.loop",
+      );
+    }
+  });
+
+  it("uses role names as agent names in default (no-domain) mode", () => {
+    const d = defaultDomain();
+    const names = d.agents.map((a) => a.name).sort();
+    assert.deepEqual(names, ["executor", "orchestrator", "reviewer"]);
   });
 });

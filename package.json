@@ -12,7 +12,7 @@
     "src/templates/"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node --input-type=module -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\" && tsc -p tsconfig.build.json",
     "test:build": "tsc",
     "test": "npm run test:build && node --test \"dist/__tests__/*.test.js\"",
     "dev": "tsx src/cli.ts",

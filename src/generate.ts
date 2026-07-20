@@ -72,8 +72,11 @@ interface CommandSourceEntry {
 /**
  * 无 domain 时使用的"虚拟"领域：engine=loop + 三角色 + 单个 entry 命令。
  * 让 generate/validate 在无 domain 路径下也能拿到完整的 ResolvedDomain。
+ *
+ * 导出供 validate.ts 复用——避免两边各自硬编码"无领域时的描述"，改 registry
+ * 时只改一处。
  */
-function defaultDomain(): ResolvedDomain {
+export function defaultDomain(): ResolvedDomain {
   return {
     id: "__default__",
     engine: { type: "loop" },

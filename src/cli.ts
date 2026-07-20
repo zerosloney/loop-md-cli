@@ -295,7 +295,7 @@ function main(): void {
       console.error("错误: --watch 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const cleanup = startWatch(selected, args.domain || undefined, args.domainFiles);
+    const cleanup = startWatch(selected, args.domain || undefined, args.domainFiles, undefined, args.incremental);
     process.on("SIGINT", () => {
       console.log("\n👋 监听已停止。");
       cleanup();

@@ -51,15 +51,17 @@ class Debouncer {
  * @param domain 领域 ID
  * @param domainFiles 自定义领域文件路径
  * @param cwd 工作目录，默认为 process.cwd()
+ * @param incremental 是否走增量生成（仅写变化的文件），默认 false（全量）
  */
 export function startWatch(
   platforms: string[],
   domain?: string,
   domainFiles: string[] = [],
   cwd = process.cwd(),
+  incremental = false,
 ): () => void {
   const debouncer = new Debouncer(() => {
-    runGeneration(platforms, domain, domainFiles, cwd);
+    runGeneration(platforms, domain, domainFiles, cwd, incremental);
   }, 300);
 
   const watchedFiles: string[] = [];
@@ -90,11 +92,13 @@ export function startWatch(
   }
 
   // 初始生成
+  const modeLabel = incremental ? "增量" : "全量";
   console.log("👀 监听模板和领域文件变化...");
   console.log(`   平台: ${platforms.join(", ")}`);
+  console.log(`   模式: ${modeLabel}`);
   if (domain) console.log(`   领域: ${domain}`);
   console.log("   按 Ctrl+C 退出\n");
-  runGeneration(platforms, domain, domainFiles, cwd);
+  runGeneration(platforms, domain, domainFiles, cwd, incremental);
 
   // 返回清理函数
   return () => {
@@ -109,9 +113,27 @@ export function startWatch(
   };
 }
 
-function runGeneration(platforms: string[], domain?: string, domainFiles: string[] = [], cwd = process.cwd()): void {
+function runGeneration(
+  platforms: string[],
+  domain: string | undefined,
+  domainFiles: string[],
+  cwd: string,
+  incremental: boolean,
+): void {
   for (const key of platforms) {
-    const { agents, commands } = generatePlatform(key, false, DEFAULT_TEMPLATES_ROOT, domain, domainFiles, false, cwd);
-    console.log(`[${key}] → agents/${agents} commands/${commands}`);
+    const { agents, commands, written } = generatePlatform(
+      key,
+      false,
+      DEFAULT_TEMPLATES_ROOT,
+      domain,
+      domainFiles,
+      incremental,
+      cwd,
+    );
+    if (incremental && typeof written === "number") {
+      console.log(`[${key}] → agents/${agents} commands/${commands} (+${written} 更新)`);
+    } else {
+      console.log(`[${key}] → agents/${agents} commands/${commands}`);
+    }
   }
 }
