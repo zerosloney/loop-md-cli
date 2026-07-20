@@ -15,5 +15,5 @@ dist/
 # Tooling auto-generated (Trellis workflow)
 AGENTS.md
 
-# forge-loop incremental manifest cache (per-developer, not shared)
-.forge-loop/cache/
+# loop-md-cli incremental manifest cache (per-developer, not shared)
+.loop-md-cli/cache/

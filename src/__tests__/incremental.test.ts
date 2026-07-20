@@ -42,7 +42,7 @@ describe("manifest", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-inc-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-inc-test-"));
   });
 
   it("loads empty manifest when file does not exist", () => {
@@ -72,7 +72,7 @@ describe("manifest", () => {
   });
 
   it("uses cwd to scope manifests (no leakage between cwds)", () => {
-    const otherDir = mkdtempSync(join(tmpdir(), "forge-loop-inc-other-"));
+    const otherDir = mkdtempSync(join(tmpdir(), "loop-md-cli-inc-other-"));
     const m1: Manifest = { "a.md": { hash: "1" } };
     const m2: Manifest = { "b.md": { hash: "2" } };
     saveManifest("claude", m1, tmpDir);
@@ -85,15 +85,15 @@ describe("manifest", () => {
     assert.equal(loaded1["b.md"], undefined, "no cross-cwd leakage");
   });
 
-  // ─── 路径约定：manifest 落在 .forge-loop/cache/ 子目录，与用户领域文件隔离 ───
-  it("writes manifest to .forge-loop/cache/ subdirectory", () => {
+  // ─── 路径约定：manifest 落在 .loop-md-cli/cache/ 子目录，与用户领域文件隔离 ───
+  it("writes manifest to .loop-md-cli/cache/ subdirectory", () => {
     saveManifest("claude", {}, tmpDir);
-    const expected = join(tmpDir, ".forge-loop", "cache", "claude.json");
-    assert.ok(existsSync(expected), "manifest should live under .forge-loop/cache/");
-    // 同时确认不会污染 .forge-loop/ 根（用户领域文件的位置——现在是 .opencode/domains/，
-    // 但 .forge-loop/ 根保持干净也是好习惯）
-    const rootManifest = join(tmpDir, ".forge-loop", "claude.json");
-    assert.ok(!existsSync(rootManifest), "manifest must NOT live at .forge-loop/ root");
+    const expected = join(tmpDir, ".loop-md-cli", "cache", "claude.json");
+    assert.ok(existsSync(expected), "manifest should live under .loop-md-cli/cache/");
+    // 同时确认不会污染 .loop-md-cli/ 根（用户领域文件的位置——现在是 .opencode/domains/，
+    // 但 .loop-md-cli/ 根保持干净也是好习惯）
+    const rootManifest = join(tmpDir, ".loop-md-cli", "claude.json");
+    assert.ok(!existsSync(rootManifest), "manifest must NOT live at .loop-md-cli/ root");
   });
 });
 
@@ -178,7 +178,7 @@ describe("applyChanges", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-apply-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-apply-test-"));
   });
 
   it("updates manifest with new hashes", () => {

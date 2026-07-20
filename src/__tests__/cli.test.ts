@@ -32,7 +32,7 @@ describe("CLI --help and --version", () => {
     const { stdout, stderr, code } = await runCli(["--help"]);
     assert.equal(code, 0, "--help should exit 0");
     assert.equal(stderr, "", "--help should produce no stderr");
-    assert.ok(stdout.includes("forge-loop"), "should contain program name");
+    assert.ok(stdout.includes("loop-md-cli"), "should contain program name");
     assert.ok(stdout.includes("--help"), "should mention --help flag");
     assert.ok(stdout.includes("--version"), "should mention --version flag");
     assert.ok(stdout.includes("--all"), "should mention --all flag");

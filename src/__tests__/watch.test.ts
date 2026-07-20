@@ -14,7 +14,7 @@ describe("startWatch", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd();
-    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-watch-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-watch-test-"));
     process.chdir(tmpDir);
   });
 
@@ -42,15 +42,15 @@ describe("startWatch", () => {
   // ─── 缺陷 D 回归：--watch --incremental 应该真正走增量生成 ───
   // 旧实现 startWatch 签名没 incremental 参数，--watch --incremental 的 -i 被默默忽略，
   // 每次文件改动全量重写所有文件。修复后增量模式会生成 manifest 缓存作为特征产物。
-  it("incremental=true produces manifest cache under .forge-loop/cache/", () => {
+  it("incremental=true produces manifest cache under .loop-md-cli/cache/", () => {
     // 把内置模板复制到临时目录，让 generate 能找到
     const srcTemplates = join(originalCwd, "src", "templates");
     copyDir(srcTemplates, join(tmpDir, ".opencode", "templates"));
 
     const cleanup = startWatch(["claude"], undefined, [], tmpDir, true);
     try {
-      // 增量模式的特征产物：.forge-loop/cache/<platform>.json
-      const manifestPath = join(tmpDir, ".forge-loop", "cache", "claude.json");
+      // 增量模式的特征产物：.loop-md-cli/cache/<platform>.json
+      const manifestPath = join(tmpDir, ".loop-md-cli", "cache", "claude.json");
       assert.ok(existsSync(manifestPath), "incremental watch should produce manifest cache");
     } finally {
       cleanup();

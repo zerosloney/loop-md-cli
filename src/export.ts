@@ -8,8 +8,8 @@
  * 期望只产出一个 ZIP 文件，不应该在 cwd 留下 .claude/ .opencode/ 等目录。
  *
  * 用法:
- *   forge-loop --all --archive configs.zip
- *   forge-loop --claude --opencode --archive
+ *   loop-md-cli --all --archive configs.zip
+ *   loop-md-cli --claude --opencode --archive
  */
 import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
@@ -68,7 +68,7 @@ export function exportArchive(
 
   // 在临时目录里生成，避免污染用户工程目录。把用户的 .opencode/templates/ 和
   // .opencode/domains/ 一并带进去，让生成能用到团队共享模板/领域。
-  const tmpBase = mkdtempSync(join(tmpdir(), "forge-loop-archive-"));
+  const tmpBase = mkdtempSync(join(tmpdir(), "loop-md-cli-archive-"));
   try {
     copyDir(join(cwd, ".opencode", "templates"), join(tmpBase, ".opencode", "templates"));
     copyDir(join(cwd, ".opencode", "domains"), join(tmpBase, ".opencode", "domains"));

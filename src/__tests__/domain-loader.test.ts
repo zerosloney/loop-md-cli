@@ -86,7 +86,7 @@ describe("domain-loader", () => {
   });
 
   it("merges extra CLI domain files with override", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-domain-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-domain-test-"));
     try {
       const extraFile = join(tmpDir, "my-custom-domain.json");
       writeFileSync(extraFile, JSON.stringify({
@@ -119,7 +119,7 @@ describe("domain-loader", () => {
   // ─── 自动扫描 .opencode/domains/*.json（README §"添加新领域"承诺的能力）───
 
   it("auto-scans .opencode/domains/ when cwd is provided", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-scan-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-scan-test-"));
     try {
       const domainsDir = join(tmpDir, DOMAINS_DIR);
       mkdirSync(domainsDir, { recursive: true });
@@ -151,7 +151,7 @@ describe("domain-loader", () => {
   });
 
   it("merges auto-scanned domains with explicit --domain-file (explicit wins by id)", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-merge-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-merge-test-"));
     try {
       const domainsDir = join(tmpDir, DOMAINS_DIR);
       mkdirSync(domainsDir, { recursive: true });
@@ -187,7 +187,7 @@ describe("domain-loader", () => {
   });
 
   it("skips invalid JSON in domains dir without throwing (warns on stderr)", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-bad-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-bad-test-"));
     try {
       const domainsDir = join(tmpDir, DOMAINS_DIR);
       mkdirSync(domainsDir, { recursive: true });
