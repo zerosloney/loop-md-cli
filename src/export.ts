@@ -4,12 +4,16 @@
  * 零依赖实现：使用 Node.js 内置 fs 构建合法 ZIP 归档（无压缩模式）。
  * ZIP 格式简单且跨平台（Windows/macOS/Linux 均原生支持）。
  *
+ * 重要：生成过程在临时目录中进行，**不污染用户工程目录**——用户跑 --archive
+ * 期望只产出一个 ZIP 文件，不应该在 cwd 留下 .claude/ .opencode/ 等目录。
+ *
  * 用法:
  *   loop-forge --all --archive configs.zip
  *   loop-forge --claude --opencode --archive
  */
-import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import { PLATFORMS, PLATFORM_KEYS } from "./platforms.js";
 import { generatePlatform } from "./generate.js";
@@ -38,6 +42,21 @@ function collectFiles(dir: string): string[] {
   return files;
 }
 
+/** 递归复制 srcDir 到 destDir（用于把用户模板带进临时目录）。 */
+function copyDir(srcDir: string, destDir: string): void {
+  if (!existsSync(srcDir)) return;
+  mkdirSync(destDir, { recursive: true });
+  for (const entry of readdirSync(srcDir)) {
+    const s = join(srcDir, entry);
+    const d = join(destDir, entry);
+    if (statSync(s).isDirectory()) {
+      copyDir(s, d);
+    } else {
+      copyFileSync(s, d);
+    }
+  }
+}
+
 export function exportArchive(
   platforms: string[],
   output: string,
@@ -47,41 +66,52 @@ export function exportArchive(
 ): ExportResult {
   if (!output.endsWith(".zip")) output += ".zip";
 
-  // 先生成
-  for (const key of platforms) {
-    generatePlatform(key, false, ".opencode/templates", domain, domainFiles, false, cwd);
-  }
+  // 在临时目录里生成，避免污染用户工程目录。把用户的 .opencode/templates/ 和
+  // .opencode/domains/ 一并带进去，让生成能用到团队共享模板/领域。
+  const tmpBase = mkdtempSync(join(tmpdir(), "loop-forge-archive-"));
+  try {
+    copyDir(join(cwd, ".opencode", "templates"), join(tmpBase, ".opencode", "templates"));
+    copyDir(join(cwd, ".opencode", "domains"), join(tmpBase, ".opencode", "domains"));
 
-  // 收集文件
-  interface ZipEntry { name: string; data: Buffer; }
-  const entries: ZipEntry[] = [];
+    for (const key of platforms) {
+      generatePlatform(key, false, ".opencode/templates", domain, domainFiles, false, tmpBase);
+    }
 
-  for (const key of platforms) {
-    const platform = PLATFORMS[key];
-    if (!platform) continue;
-    const baseDir = join(cwd, platform.dir);
-    if (!existsSync(baseDir)) continue;
-    for (const subDir of ["agents", "commands"]) {
-      const dirPath = join(baseDir, subDir);
-      if (!existsSync(dirPath)) continue;
-      for (const file of collectFiles(dirPath)) {
-        const fileName = file.split(/[/\\]/).pop()!;
-        entries.push({ name: `${platform.dir}/${subDir}/${fileName}`, data: readFileSync(file) });
+    // 收集文件
+    interface ZipEntry { name: string; data: Buffer; }
+    const entries: ZipEntry[] = [];
+
+    for (const key of platforms) {
+      const platform = PLATFORMS[key];
+      if (!platform) continue;
+      const baseDir = join(tmpBase, platform.dir);
+      if (!existsSync(baseDir)) continue;
+      for (const subDir of ["agents", "commands"]) {
+        const dirPath = join(baseDir, subDir);
+        if (!existsSync(dirPath)) continue;
+        for (const file of collectFiles(dirPath)) {
+          const fileName = file.split(/[/\\]/).pop()!;
+          entries.push({ name: `${platform.dir}/${subDir}/${fileName}`, data: readFileSync(file) });
+        }
       }
     }
+
+    const zipBuffer = buildZip(entries);
+
+    // output 保持原值不变（相对路径相对 process.cwd() 解析，与 generate.ts 行为一致）。
+    // 用 resolve 把 output 父目录算出来确保存在；output 本身原样返回给调用方。
+    const outDir = join(output, "..");
+    if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
+    writeFileSync(output, zipBuffer);
+
+    return {
+      filePath: output,
+      fileCount: entries.length,
+      platformCount: platforms.filter((k) => PLATFORMS[k]).length,
+    };
+  } finally {
+    rmSync(tmpBase, { recursive: true, force: true });
   }
-
-  const zipBuffer = buildZip(entries);
-
-  const outDir = join(output, "..");
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-  writeFileSync(output, zipBuffer);
-
-  return {
-    filePath: output,
-    fileCount: entries.length,
-    platformCount: platforms.filter((k) => PLATFORMS[k]).length,
-  };
 }
 
 // ── ZIP 构建 ──

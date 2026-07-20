@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
@@ -155,24 +155,32 @@ describe("exportArchive", () => {
   });
 
   it("handles non-ASCII (Chinese) filenames without crashing and preserves UTF-8", () => {
-    // 故意在生成结果目录里放一个中文文件名的 agent，让 collectFiles 收进 ZIP
-    const claudeAgentsDir = join(tmpDir, ".claude", "agents");
-    mkdirSync(claudeAgentsDir, { recursive: true });
-    writeFileSync(join(claudeAgentsDir, "测试-reviewer.md"), "# 测试 agent\n", "utf-8");
-    writeFileSync(join(claudeAgentsDir, "ralph-orchestrator.md"), "# ralph\n", "utf-8");
+    // 通过 .opencode/domains/ 放一个领域文件，让 agent name 含中文（schema 不限制字符集）
+    const domainsDir = join(tmpDir, ".opencode", "domains");
+    mkdirSync(domainsDir, { recursive: true });
+    writeFileSync(
+      join(domainsDir, "cn-domain.json"),
+      JSON.stringify({
+        id: "cn-domain",
+        engine: { type: "loop" },
+        agents: [
+          { role: "orchestrator", name: "测试-orchestrator", description: "中文主控" },
+          { role: "reviewer", name: "测试-reviewer", description: "中文审查" },
+        ],
+        commands: [
+          { kind: "entry", agent: "测试-orchestrator", name: "测试-loop", description: "中文闭环" },
+        ],
+      }),
+      "utf-8",
+    );
 
     const outputPath = join(tmpDir, "test-unicode.zip");
-    // exportArchive 会先生成再打包，但我们手动放的文件在生成过程中可能被覆盖；
-    // 这里用生成后再放文件、再调一次 export 的策略不行（export 内部会生成覆盖）。
-    // 改用：直接调用 export（会生成默认 agents），然后单独写文件后用同一个 cli 重新 archive。
-    // 简化：直接验证 exportArchive 在已有中文文件场景不崩溃。
-    const result = exportArchive(["claude"], outputPath, undefined, [], tmpDir);
+    // 用 --domain cn-domain 触发该领域，生成中文文件名
+    const result = exportArchive(["claude"], outputPath, "cn-domain", [], tmpDir);
 
     const buf = readFileSync(result.filePath);
     const entries = parseZip(buf);
 
-    // 至少应包含我们手动放的两个文件名（前提：未被 export 内部 generatePlatform 覆盖删除）
-    // 由于 export 内部 generatePlatform 是全量写，手动放的文件会与生成的共存（不清理）
     const names = entries.map((e) => e.name);
     assert.ok(
       names.some((n) => n.includes("测试-reviewer")),
@@ -196,5 +204,24 @@ describe("exportArchive", () => {
     for (const pfx of prefixes) {
       assert.ok(entries.some((e) => e.name.startsWith(pfx)), `should have entries under ${pfx}`);
     }
+  });
+
+  // ─── 缺陷 C 回归：archive 不应在用户工程目录留下生成痕迹 ───
+  // 旧实现 exportArchive 直接在 cwd 调 generatePlatform，导致 .claude/ .opencode/ 等
+  // 被创建在用户工程里——用户跑 --archive 期望只产出 ZIP，不该污染工程目录。
+  it("does not pollute cwd with generated platform directories", () => {
+    // 用一个完全干净的子目录作为 cwd——没模板时 generate 会回退到内置模板，所以不需要预设。
+    const workDir = join(tmpDir, "clean-cwd");
+    mkdirSync(workDir, { recursive: true });
+
+    const outputPath = join(workDir, "out.zip");
+    exportArchive(["claude", "opencode"], outputPath, undefined, [], workDir);
+
+    // workDir 里应只有 out.zip，没有任何生成的平台目录
+    const entries = readdirSync(workDir).sort();
+    assert.deepEqual(entries, ["out.zip"], `cwd should only contain the zip, got: ${entries.join(", ")}`);
+    // 显式反例：不应有 .claude/ 或 .opencode/
+    assert.ok(!existsSync(join(workDir, ".claude")), "must not create .claude/ in cwd");
+    assert.ok(!existsSync(join(workDir, ".opencode")), "must not create .opencode/ in cwd");
   });
 });
