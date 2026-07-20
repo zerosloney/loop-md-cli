@@ -84,6 +84,17 @@ describe("manifest", () => {
     assert.equal(loaded2["b.md"]?.hash, "2");
     assert.equal(loaded1["b.md"], undefined, "no cross-cwd leakage");
   });
+
+  // ─── 路径约定：manifest 落在 .loop-forge/cache/ 子目录，与用户领域文件隔离 ───
+  it("writes manifest to .loop-forge/cache/ subdirectory", () => {
+    saveManifest("claude", {}, tmpDir);
+    const expected = join(tmpDir, ".loop-forge", "cache", "claude.json");
+    assert.ok(existsSync(expected), "manifest should live under .loop-forge/cache/");
+    // 同时确认不会污染 .loop-forge/ 根（用户领域文件的位置——现在是 .opencode/domains/，
+    // 但 .loop-forge/ 根保持干净也是好习惯）
+    const rootManifest = join(tmpDir, ".loop-forge", "claude.json");
+    assert.ok(!existsSync(rootManifest), "manifest must NOT live at .loop-forge/ root");
+  });
 });
 
 describe("detectChanges", () => {

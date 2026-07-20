@@ -1,11 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-import { resolveDomains, findDomain } from "../domain-loader.js";
+import { resolveDomains, findDomain, DOMAINS_DIR } from "../domain-loader.js";
 
 describe("domain-loader", () => {
   it("includes all builtin domains by default", () => {
@@ -111,6 +111,105 @@ describe("domain-loader", () => {
       const ids = domains.map((d) => d.id);
       assert.ok(ids.includes("programming"));
       assert.ok(ids.includes("ralph"));
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // ─── 自动扫描 .opencode/domains/*.json（README §"添加新领域"承诺的能力）───
+
+  it("auto-scans .opencode/domains/ when cwd is provided", () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-scan-test-"));
+    try {
+      const domainsDir = join(tmpDir, DOMAINS_DIR);
+      mkdirSync(domainsDir, { recursive: true });
+      writeFileSync(
+        join(domainsDir, "foo.json"),
+        JSON.stringify({
+          id: "foo",
+          engine: { type: "loop" },
+          agents: [
+            { role: "orchestrator", name: "foo-orch", description: "Foo orchestrator" },
+          ],
+          commands: [
+            { kind: "entry", agent: "foo-orch", name: "foo-loop", description: "Foo loop" },
+          ],
+        }),
+      );
+
+      const domains = resolveDomains([], tmpDir);
+      const foo = findDomain(domains, "foo");
+      assert.equal(foo.id, "foo");
+      assert.equal(foo.agents[0].name, "foo-orch");
+
+      // 内置领域仍在
+      const ids = domains.map((d) => d.id);
+      assert.ok(ids.includes("programming"), "builtins should still be present");
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("merges auto-scanned domains with explicit --domain-file (explicit wins by id)", () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-merge-test-"));
+    try {
+      const domainsDir = join(tmpDir, DOMAINS_DIR);
+      mkdirSync(domainsDir, { recursive: true });
+      writeFileSync(
+        join(domainsDir, "scanned.json"),
+        JSON.stringify({
+          id: "scanned",
+          engine: { type: "loop" },
+          agents: [{ role: "orchestrator", name: "scanned-orch", description: "from scan" }],
+          commands: [{ kind: "entry", agent: "scanned-orch", name: "scanned-loop", description: "x" }],
+        }),
+      );
+
+      // 同时用 --domain-file 传入另一个不冲突的领域
+      const extraFile = join(tmpDir, "explicit.json");
+      writeFileSync(
+        extraFile,
+        JSON.stringify({
+          id: "explicit",
+          engine: { type: "loop" },
+          agents: [{ role: "orchestrator", name: "explicit-orch", description: "from CLI" }],
+          commands: [{ kind: "entry", agent: "explicit-orch", name: "explicit-loop", description: "y" }],
+        }),
+      );
+
+      const domains = resolveDomains([extraFile], tmpDir);
+      const ids = domains.map((d) => d.id);
+      assert.ok(ids.includes("scanned"), "auto-scanned domain should be present");
+      assert.ok(ids.includes("explicit"), "explicit domain should be present");
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips invalid JSON in domains dir without throwing (warns on stderr)", () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-bad-test-"));
+    try {
+      const domainsDir = join(tmpDir, DOMAINS_DIR);
+      mkdirSync(domainsDir, { recursive: true });
+      // 一个坏文件
+      writeFileSync(join(domainsDir, "bad.json"), "{ not valid json");
+      // 一个好文件
+      writeFileSync(
+        join(domainsDir, "good.json"),
+        JSON.stringify({
+          id: "good",
+          engine: { type: "loop" },
+          agents: [{ role: "orchestrator", name: "good-orch", description: "ok" }],
+          commands: [{ kind: "entry", agent: "good-orch", name: "good-loop", description: "ok" }],
+        }),
+      );
+
+      // 不应抛
+      const domains = resolveDomains([], tmpDir);
+      const ids = domains.map((d) => d.id);
+      assert.ok(ids.includes("good"), "valid file should still load");
+      assert.ok(!ids.includes("bad"), "invalid file should be skipped");
+      assert.ok(ids.includes("programming"), "builtins still present");
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

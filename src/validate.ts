@@ -77,7 +77,7 @@ export function validatePlatform(
   const agentsDir = join(base, "agents");
   const commandsDir = join(base, "commands");
 
-  const resolvedDomains = resolveDomains(domainFiles);
+  const resolvedDomains = resolveDomains(domainFiles, cwd);
   // 无 domain 时用默认虚拟领域（与 generate.ts 的 defaultDomain 同步）：
   // renderDomainId 传 undefined，renderedCommand 时 engineType 显式给 "loop"。
   // 这里用 null 表示"无领域"分支，让两个路径走相同的渲染调用样式。

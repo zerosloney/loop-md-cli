@@ -268,17 +268,18 @@ loop-forge --archive configs --all
 
 ```
 your-project/
-├── .loop-forge/                    # 团队共享的领域定义（提交）
-│   ├── ralph.json                  # 任务列表驱动范式
-│   └── security-audit.json         # 团队特有领域
-├── .opencode/                      # 团队共享的自定义模板（提交 templates/）
-│   └── templates/
+├── .opencode/                      # 团队共享（提交）
+│   ├── domains/                    # 团队共享的领域定义
+│   │   ├── ralph.json              # 任务列表驱动范式
+│   │   └── security-audit.json     # 团队特有领域
+│   └── templates/                  # 团队共享的自定义模板
 │       ├── agents/
 │       │   └── security-auditor.md # 覆盖内置 reviewer 模板
 │       └── commands/
 ├── .claude/                        # 成员本机生成（不提交，gitignore）
 ├── .opencode/agents/               # 同上
 ├── .codebuddy/
+├── .loop-forge/cache/              # incremental manifest 缓存（不提交，gitignore）
 └── ...
 ```
 
@@ -295,18 +296,22 @@ your-project/
 .opencode/agents/
 .opencode/commands/
 
-# 但 .opencode/templates/ 保留
+# 但 .opencode/templates/ 和 .opencode/domains/ 保留
 !.opencode/templates/
+!.opencode/domains/
+
+# loop-forge incremental manifest 缓存（成员本机，不共享）
+.loop-forge/cache/
 ```
 
 ### 标准循环
 
 ```
-1. 领域作者修改 .loop-forge/*.json（领域定义）或 .opencode/templates/**（模板）
+1. 领域作者修改 .opencode/domains/*.json（领域定义）或 .opencode/templates/**（模板）
               ↓
 2. 本地验证：loop-forge --validate --all
               ↓
-3. 提交 PR（含 .loop-forge/ 和 .opencode/templates/）
+3. 提交 PR（含 .opencode/domains/ 和 .opencode/templates/）
               ↓
 4. CI 自动跑 loop-forge --validate（见下一节"CI 集成"）
               ↓
@@ -315,7 +320,7 @@ your-project/
 
 ### 团队共享领域的最小例子
 
-把团队特有范式放进 `.loop-forge/security-audit.json`：
+把团队特有范式放进 `.opencode/domains/security-audit.json`：
 
 ```json
 {
@@ -341,11 +346,13 @@ your-project/
 }
 ```
 
-队友拉取后即可使用：
+队友拉取后即可使用——`.opencode/domains/` 里的文件会被自动扫描，`--domain <id>` 直接可用：
 
 ```bash
-loop-forge --claude --opencode --domain-file .loop-forge/security-audit.json
+loop-forge --claude --opencode --domain security-audit
 ```
+
+> 领域文件放在 `.opencode/domains/` 下会自动发现。如果领域文件在别处，也可以用 `--domain-file <path>` 显式指定。
 
 ## CI 集成
 
@@ -358,7 +365,7 @@ name: agent-config-validate
 on:
   pull_request:
     paths:
-      - '.loop-forge/**'
+      - '.opencode/domains/**'
       - '.opencode/templates/**'
       - '.github/workflows/agent-config.yml'
   push:
@@ -383,7 +390,7 @@ jobs:
         run: loop-forge --validate --all
 ```
 
-效果：任何修改了 `.loop-forge/` 领域定义或 `.opencode/templates/` 模板的 PR，CI 都会跑一遍生成 + 验证。生成的 `.claude/` `.opencode/` 等文件**不需要提交**——CI 只验证"模板改完还能跑出预期配置"，团队成员本机生成即可。
+效果：任何修改了 `.opencode/domains/` 领域定义或 `.opencode/templates/` 模板的 PR，CI 都会跑一遍生成 + 验证。生成的 `.claude/` `.opencode/` 等文件**不需要提交**——CI 只验证"模板改完还能跑出预期配置"，团队成员本机生成即可。
 
 > 想把生成结果也提交到 git 用于代码评审？加一行 `git add -A .claude/ .opencode/ .codebuddy/ .trae/ .omp/ .qoder/ .kilo/ && git diff --cached --exit-code`，但默认不推荐（生成结果跟模板强耦合，diff 会很吵）。
 
@@ -443,7 +450,7 @@ loop-forge --list    # 列出所有支持的平台
 校验会逐字段报错，按错误信息修：
 
 ```text
-领域文件校验失败 (.loop-forge/my-domain.json):
+领域文件校验失败 (.opencode/domains/my-domain.json):
   engine.type: 必填，必须是 loop
   commands[0].kind: 必填，必须是 entry
   commands[0].agent: "xxx" 在 agents 中不存在
@@ -591,7 +598,9 @@ export class MyEditorRenderer implements Renderer {
 
 ### 添加新领域
 
-在项目根目录下创建 `.opencode/domains/<id>.json` 文件，格式参考 `src/domains/writing.json`。
+在项目根目录下创建 `.opencode/domains/<id>.json` 文件，格式参考 [§自定义领域](#自定义领域) 的 JSON 示例，或参照内置领域的定义（`src/domains.ts` 的 `DOMAINS` 对象）。
+
+> **自动扫描**：放在 `.opencode/domains/*.json` 的领域文件会被自动发现，`--domain <id>` 直接可用，无需 `--domain-file` 显式指定路径。如果领域文件在别处（如临时调试），用 `--domain-file <path>` 显式传入。
 
 ## 支持的平台
 

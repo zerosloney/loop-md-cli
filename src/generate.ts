@@ -243,7 +243,7 @@ export function generatePlatform(
   const agentTemplates = { ...pkgAgentTemplates, ...userAgentTemplates };
   const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
 
-  const resolvedDomains = resolveDomains(domainFiles);
+  const resolvedDomains = resolveDomains(domainFiles, cwd);
   // 无 domain 时使用默认虚拟领域，统一走 ResolvedDomain 路径
   const resolvedDomain: ResolvedDomain = domain
     ? findDomain(resolvedDomains, domain)

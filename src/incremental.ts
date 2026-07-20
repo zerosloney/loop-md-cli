@@ -1,8 +1,11 @@
 /**
  * 增量生成引擎：通过内容哈希检测文件变更，仅重写已变化的文件，并清理 manifest 记录过的孤儿。
  *
- * Manifest 存储位置：{cwd}/.loop-forge/{platform}.json
+ * Manifest 存储位置：{cwd}/.loop-forge/cache/{platform}.json
  * 格式：{ "agents/orchestrator.md": { "hash": "sha256..." } }
+ *
+ * 路径选择：放在 .loop-forge/cache/ 子目录，与用户领域文件（.opencode/domains/）物理隔离，
+ * 避免团队共享的领域 JSON 与本机 manifest 缓存混放。整个 .loop-forge/cache/ 应被 gitignore。
  *
  * 工作流程：
  *   1. 读取 manifest（不存在则视为首次运行）
@@ -19,7 +22,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
-const MANIFEST_DIR = ".loop-forge";
+const MANIFEST_DIR = ".loop-forge/cache";
 
 // ── 类型 ──
 
