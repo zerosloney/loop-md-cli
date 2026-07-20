@@ -32,9 +32,7 @@ export function loadCommandTemplates(): Record<string, string> {
 }
 
 export function renderTemplate(template: string, vars: TemplateVars): string {
-  let result = template;
-  for (const [key, value] of Object.entries(vars)) {
-    result = result.replaceAll(`{{${key}}}`, value);
-  }
-  return result;
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    return key in vars ? vars[key] : match;
+  });
 }
