@@ -20,15 +20,25 @@ describe("template", () => {
   it("loadAgentTemplates returns package templates", () => {
     const agents = loadAgentTemplates();
     assert.ok(Object.keys(agents).length > 0, "expected package agent templates");
-    assert.ok("orchestrator" in agents);
-    assert.ok(agents.orchestrator.includes("{{name}}"));
+    // 内置 4 个领域 + ralph 内核 = 至少 16 个 agent 模板（4 × 3 角色 + ralph 已计入）
+    // 至少要有 ralph-orchestrator（最通用的内核范式）
+    assert.ok("ralph-orchestrator" in agents, "ralph-orchestrator should exist as universal baseline");
+    assert.ok(agents["ralph-orchestrator"].includes("{{name}}"));
+    // 三个特化领域都应该有专属模板
+    assert.ok("programming-orchestrator" in agents, "programming-orchestrator should exist");
+    assert.ok("testing-orchestrator" in agents, "testing-orchestrator should exist");
+    assert.ok("writing-orchestrator" in agents, "writing-orchestrator should exist");
   });
 
   it("loadCommandTemplates returns package command templates", () => {
     const commands = loadCommandTemplates();
     assert.ok(Object.keys(commands).length > 0, "expected package command templates");
-    assert.ok("loop" in commands);
-    assert.ok(commands.loop.includes("{{agent}}"));
+    // 4 个领域各自的 command 模板
+    assert.ok("ralph-loop" in commands);
+    assert.ok(commands["ralph-loop"].includes("{{agent}}"));
+    assert.ok("programming-loop" in commands);
+    assert.ok("testing-loop" in commands);
+    assert.ok("writing-loop" in commands);
   });
 
   it("leaves unreplaced placeholders untouched", () => {

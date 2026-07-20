@@ -1,34 +1,34 @@
-# forge-loop
+# loop-md-cli
 
 > 从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Code-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。
 
-forge-loop 让你**一次编写模板，到处部署**——将统一的 agent/command 定义自动转换为 7 种主流 AI 编程平台的格式，包括 `.md` 前缀的 frontmatter、工具白名单、权限模式等差异，全部自动适配。
+loop-md-cli 让你**一次编写模板，到处部署**——将统一的 agent/command 定义自动转换为 7 种主流 AI 编程平台的格式，包括 `.md` 前缀的 frontmatter、工具白名单、权限模式等差异，全部自动适配。
 
 ## 30 秒上手
 
 新成员第一次接触，按这三步走通：
 
 ```bash
-# 1. 装上（无需全局安装，npx 即可）
-npx forge-loop --list           # 确认能跑通，看到 7 个平台
+loop-md-cli --list           # 确认能跑通，看到 7 个平台
 
-# 2. 在你的项目根目录生成配置（默认无 domain 模式）
-npx forge-loop --all            # 生成 .claude/ .opencode/ .codebuddy/ .trae/ 等
+loop-md-cli --all            # 默认用 ralph 内核范式生成 .claude/ .opencode/ 等
 
-# 3. 验证一致性
-npx forge-loop --validate --all # 输出"✅ 全部一致"即成功
+loop-md-cli --validate --all # 输出"✅ 全部一致"即成功
 ```
 
 成功标志：
 - 看到 `agents/3 commands/1` 之类的输出
 - 项目根目录出现 `.claude/` `.opencode/` 等目录
-- `forge-loop --validate --all` 退出码 0
+- `loop-md-cli --validate --all` 退出码 0
 
-之后可以选 `ralph` 领域（带任务列表 + 背压熔断）或 `programming/testing/writing`（基于 ralph 的领域特化）：
+无 `--domain` 时默认回退到 `ralph`（最通用的内核范式：TaskList + 背压熔断）。
+要切换到编程/测试/写作领域的特化模板：
 
 ```bash
-npx forge-loop --opencode --domain ralph --dry-run   # 先看会生成什么
-npx forge-loop --opencode --domain ralph             # 真正写入
+npx loop-md-cli --opencode --domain programming --dry-run   # 编程：scope 铁律 + 根因分组
+npx loop-md-cli --opencode --domain testing --dry-run       # 测试：源码冻结 + 三项信号
+npx loop-md-cli --opencode --domain writing --dry-run       # 写作：术语/链接/示例质量信号
+npx loop-md-cli --opencode --domain ralph --dry-run         # 通用内核：TaskList + 背压
 ```
 
 跨平台：Windows / macOS / Linux 均可（零运行时依赖，只需 Node.js >= 18）。
@@ -44,20 +44,18 @@ npx forge-loop --opencode --domain ralph             # 真正写入
 | Trae IDE | `name` + `description` + `tools` | 大写 | 无 |
 | CodeBuddy | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase | plan/acceptEdits |
 
-手动维护 7 份配置不仅重复劳动，还容易遗漏。forge-loop 通过 **模板 + 领域 + 渲染器** 三层抽象，彻底解决这个问题。
+手动维护 7 份配置不仅重复劳动，还容易遗漏。loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象，彻底解决这个问题。
 
 ## 快速开始
 
-### 安装
-
 ```bash
-npm install -g forge-loop
+npm install -g loop-md-cli
 ```
 
 或直接使用：
 
 ```bash
-npx forge-loop --help
+npx loop-md-cli --help
 ```
 
 > 需要 Node.js >= 18。零运行时依赖，仅依赖 TypeScript 编译输出。
@@ -65,17 +63,13 @@ npx forge-loop --help
 ### 基本用法
 
 ```bash
-# 生成所有平台
-forge-loop --all
+loop-md-cli --all
 
-# 生成指定平台
-forge-loop --claude --opencode --trae
+loop-md-cli --claude --opencode --trae
 
-# 交互式选择平台（TTY 环境）
-forge-loop
+loop-md-cli
 
-# 列出支持的平台
-forge-loop --list
+loop-md-cli --list
 ```
 
 ### 领域化生成
@@ -83,30 +77,26 @@ forge-loop --list
 使用内置领域生成领域特定的 agent 名称和描述：
 
 ```bash
-# 使用编程领域
-forge-loop --opencode --domain programming
+loop-md-cli --opencode --domain programming
 
-# 使用测试领域
-forge-loop --claude --domain testing
+loop-md-cli --claude --domain testing
 
-# 使用写作领域
-forge-loop --claude --domain writing
+loop-md-cli --claude --domain writing
 
-# 使用 ralph 领域（带 backpressure 断路器）
-forge-loop --claude --domain ralph
+loop-md-cli --claude --domain ralph
 ```
 
-内置领域一览：
+内置领域一览（每个领域都有专属模板，enforce 各自工程纪律）：
 
-| 领域 ID | Agent 名称 | 命令名称 | backpressure | 说明 |
-|---------|-----------|---------|--------------|------|
-| `ralph` | ralph-orchestrator / ralph-worker / ralph-reviewer | ralph-loop | `npm test` / max=3 / 重试 | **内核范式**：任务列表驱动 + 背压熔断 |
-| `programming` | code-orchestrator / code-builder / code-reviewer | code-loop | `npm test` / max=3 / 重试 | 基于 ralph 内核的编程领域特化（scope/baseline 驱动） |
-| `testing` | test-orchestrator / test-writer / coverage-reviewer | test-loop | `npm test` / max=3 / 重试 | 基于 ralph 内核的测试领域特化 |
-| `writing` | writing-orchestrator / writing-author / writing-reviewer | writing-loop | `npm run lint` / max=2 / 不重试 | 基于 ralph 内核的写作领域特化（弱门禁） |
+| 领域 ID | Agent 名称 | 命令名称 | backpressure | 领域铁律 |
+|---------|-----------|---------|--------------|---------|
+| `ralph` | ralph-orchestrator / ralph-worker / ralph-reviewer | ralph-loop | `npm test` / max=3 / 重试 | **内核范式**：TaskList 驱动 + 背压熔断（最通用，自定义领域无专属模板时回退到此） |
+| `programming` | code-orchestrator / code-builder / code-reviewer | code-loop | `npm test` / max=3 / 重试 | scope 铁律（hard/soft/forbidden）+ 根因分组修复 + scope drift 零容忍 |
+| `testing` | test-orchestrator / test-writer / coverage-reviewer | test-loop | `npm test` / max=3 / 重试 | **源码冻结铁律** + 三项信号（coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0） |
+| `writing` | writing-orchestrator / writing-author / writing-reviewer | writing-loop | `npm run lint` / max=2 / 不重试 | 写作边界铁律 + 三项信号（术语漂移 / 死链 / 代码示例）+ 弱门禁 |
 
-> **架构定位**：`ralph` 是 forge-loop 的内核范式——**任务列表（TaskList）驱动 + 背压熔断（backpressure circuit breaker）**。
-> 它有专属模板（`src/templates/agents/ralph-*.md`），与 programming/testing 的 scope/baseline 范式在结构上明显区分。
+> **架构定位**：`ralph` 是 loop-md-cli 的内核范式——**TaskList 驱动 + 背压熔断**，是最通用的 loop 形态。
+> `programming` / `testing` / `writing` 是基于 ralph 内核的领域特化，**每个都有专属模板 enforce 各自的工程纪律**（不只是字符串替换）。
 > `backpressure`（断路器）是通用内核能力，所有内置领域默认携带；`programming` / `testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
 
 ### 概念分层：Engine 三层架构
@@ -166,16 +156,14 @@ forge-loop --claude --domain ralph
 
 通过 `--domain-file` 传入：
 
-```bash
-forge-loop --opencode --domain-file ./my-domain.json
+loop-md-cli --opencode --domain-file ./my-domain.json
 ```
 
 ### 演练模式
 
 不实际写入文件，仅打印将要生成的内容：
 
-```bash
-forge-loop --all --dry-run
+loop-md-cli --all --dry-run
 ```
 
 ### 验证模式
@@ -183,14 +171,11 @@ forge-loop --all --dry-run
 检查现有平台配置与模板的一致性，检测过期、缺失、多余的文件：
 
 ```bash
-# 验证单个平台
-forge-loop --validate --claude
+loop-md-cli --validate --claude
 
-# 验证所有平台
-forge-loop --validate --all
+loop-md-cli --validate --all
 
-# 验证指定领域
-forge-loop --validate --claude -d programming
+loop-md-cli --validate --claude -d programming
 
 # 退出码：0 = 一致，1 = 发现问题
 ```
@@ -208,14 +193,9 @@ forge-loop --validate --claude -d programming
 自动监听模板和领域文件变化，修改后重新生成：
 
 ```bash
-# 监听单个平台
-forge-loop --watch --claude
-
-# 监听所有平台
-forge-loop --watch --all
-
-# 监听 + 指定领域
-forge-loop --watch --claude -d writing
+loop-md-cli --watch --claude
+loop-md-cli --watch --all
+loop-md-cli --watch --claude -d writing
 
 # 按 Ctrl+C 退出
 ```
@@ -225,11 +205,9 @@ forge-loop --watch --claude -d writing
 仅重写内容发生变化的文件，跳过未修改的文件：
 
 ```bash
-# 增量生成所有平台
-forge-loop --incremental --all
+loop-md-cli --incremental --all
 
-# 增量生成 + 指定领域
-forge-loop --incremental --claude -d programming
+loop-md-cli --incremental --claude -d programming
 ```
 
 首次运行等同于全量生成。之后若模板或领域未变，输出 `+0 更新`：
@@ -244,19 +222,11 @@ forge-loop --incremental --claude -d programming
 将所有平台配置打包为 ZIP 压缩包，方便分发：
 
 ```bash
-# 导出所有平台
-forge-loop --archive configs.zip --all
-
-# 导出指定平台
-forge-loop --archive claude-only.zip --claude
-
-# 导出 + 指定领域
-forge-loop --archive writing-config.zip --all -d writing
-
-# 自动补 .zip 扩展名
-forge-loop --archive configs --all
+loop-md-cli --archive configs.zip --all
+loop-md-cli --archive claude-only.zip --claude
+loop-md-cli --archive writing-config.zip --all -d writing
+loop-md-cli --archive configs --all
 ```
-
 
 ## 团队工作流
 
@@ -279,14 +249,14 @@ your-project/
 ├── .claude/                        # 成员本机生成（不提交，gitignore）
 ├── .opencode/agents/               # 同上
 ├── .codebuddy/
-├── .forge-loop/cache/              # incremental manifest 缓存（不提交，gitignore）
+├── .loop-md-cli/cache/              # incremental manifest 缓存（不提交，gitignore）
 └── ...
 ```
 
 `.gitignore` 推荐：
 
 ```gitignore
-# forge-loop 生成的平台目录（成员本机按需生成）
+# loop-md-cli 生成的平台目录（成员本机按需生成）
 .claude/
 .codebuddy/
 .kilo/
@@ -300,8 +270,8 @@ your-project/
 !.opencode/templates/
 !.opencode/domains/
 
-# forge-loop incremental manifest 缓存（成员本机，不共享）
-.forge-loop/cache/
+# loop-md-cli incremental manifest 缓存（成员本机，不共享）
+.loop-md-cli/cache/
 ```
 
 ### 标准循环
@@ -309,13 +279,13 @@ your-project/
 ```
 1. 领域作者修改 .opencode/domains/*.json（领域定义）或 .opencode/templates/**（模板）
               ↓
-2. 本地验证：forge-loop --validate --all
+2. 本地验证：loop-md-cli --validate --all
               ↓
 3. 提交 PR（含 .opencode/domains/ 和 .opencode/templates/）
               ↓
-4. CI 自动跑 forge-loop --validate（见下一节"CI 集成"）
+4. CI 自动跑 loop-md-cli --validate（见下一节"CI 集成"）
               ↓
-5. 合并后，队友拉取代码 → 本机跑 forge-loop --all → 拿到最新 agent 配置
+5. 合并后，队友拉取代码 → 本机跑 loop-md-cli --all → 拿到最新 agent 配置
 ```
 
 ### 团队共享领域的最小例子
@@ -349,14 +319,14 @@ your-project/
 队友拉取后即可使用——`.opencode/domains/` 里的文件会被自动扫描，`--domain <id>` 直接可用：
 
 ```bash
-forge-loop --claude --opencode --domain security-audit
+loop-md-cli --claude --opencode --domain security-audit
 ```
 
 > 领域文件放在 `.opencode/domains/` 下会自动发现。如果领域文件在别处，也可以用 `--domain-file <path>` 显式指定。
 
 ## CI 集成
 
-在 GitHub Actions 上自动跑 `forge-loop --validate`，检测 agent 配置漂移。失败时阻塞 PR 合并。
+在 GitHub Actions 上自动跑 `loop-md-cli --validate`，检测 agent 配置漂移。失败时阻塞 PR 合并。
 
 `.github/workflows/agent-config.yml`：
 
@@ -380,14 +350,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install forge-loop
-        run: npm install -g forge-loop
+      - name: Install loop-md-cli
+        run: npm install -g loop-md-cli
 
       - name: Generate platform configs
-        run: forge-loop --all
+        run: loop-md-cli --all
 
       - name: Validate consistency
-        run: forge-loop --validate --all
+        run: loop-md-cli --validate --all
 ```
 
 效果：任何修改了 `.opencode/domains/` 领域定义或 `.opencode/templates/` 模板的 PR，CI 都会跑一遍生成 + 验证。生成的 `.claude/` `.opencode/` 等文件**不需要提交**——CI 只验证"模板改完还能跑出预期配置"，团队成员本机生成即可。
@@ -396,13 +366,11 @@ jobs:
 
 ## 常见问题
 
-<details>
-<summary><b>Q1: 队友拉下来跑 `forge-loop --all`，但生成的文件和我不一样？</b></summary>
+<summary><b>Q1: 队友拉下来跑 `loop-md-cli --all`，但生成的文件和我不一样？</b></summary>
 
 先用 `--validate` 查差异：
 
-```bash
-forge-loop --validate --all
+loop-md-cli --validate --all
 ```
 
 输出三类问题：
@@ -423,11 +391,16 @@ forge-loop --validate --all
 # 确认路径正确
 ls .opencode/templates/agents/
 
-# 确认文件名是 role 命名（如 orchestrator.md / executor.md）
-# 领域专属：<domain-id>-<role>.md（如 ralph-orchestrator.md）
+# 确认文件名是领域专属命名：<domain-id>-<role>.md
+# 例如 my-domain-orchestrator.md / my-domain-executor.md
 ```
 
-`forge-loop` 在用户模板目录找不到时**静默回退**到内置模板（这是有意设计，避免报错打断工作流）。如果想确认是否加载了用户模板，把 `--dry-run` 输出和默认输出对比。
+模板查找是三级回退：
+1. `<domain-id>-<role>.md`（如 `my-domain-orchestrator.md`）— 你的领域专属
+2. `ralph-<role>.md`（如 `ralph-orchestrator.md`）— 内置最通用内核
+3. 抛错（避免静默生成 0 文件）
+
+所以自定义领域**至少能跑**（自动回退到 ralph 内核范式），但要做领域特化就必须提供专属模板。
 
 </details>
 
@@ -437,7 +410,7 @@ ls .opencode/templates/agents/
 检查 flag 拼写：
 
 ```bash
-forge-loop --list    # 列出所有支持的平台
+loop-md-cli --list    # 列出所有支持的平台
 ```
 
 常见拼写错误：`--opencod`（少 e）、`--claudecode`（连写）、`--claude-code`（带连字符）。所有平台都是单 flag：`--claude --opencode --codebuddy --trae --omp --qoder --kilo`。
@@ -497,12 +470,33 @@ forge-loop --list    # 列出所有支持的平台
 
 ## 自定义模板
 
-forge-loop 会从两个位置加载模板：
+loop-md-cli 会从两个位置加载模板：
 
-1. **包内置模板** — `src/templates/agents/` 和 `src/templates/commands/`
-2. **用户自定义模板** — 项目根目录下的 `.opencode/templates/agents/` 和 `.opencode/templates/commands/`
+1. **包内置模板** — `src/templates/agents/` 和 `src/templates/commands/`（npm 包冻结）
+2. **用户自定义模板** — 项目根目录下的 `.opencode/templates/agents/` 和 `.opencode/templates/commands/`（团队 git 共享）
 
 用户自定义模板会覆盖内置模板（同名文件优先）。
+
+### 内置领域模板
+
+每个内置领域都有**专属模板**（不只是字符串替换），enforce 各自的工程纪律：
+
+| 领域 | 模板文件 | enforce 的纪律 |
+|------|---------|---------------|
+| `ralph` | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md` | TaskList 驱动 + 背压熔断（最通用，作为自定义领域无专属模板时的回退） |
+| `programming` | `programming-orchestrator.md` / `programming-executor.md` / `programming-reviewer.md` / `programming-loop.md` | scope 铁律 + 根因分组修复 + scope drift 零容忍 |
+| `testing` | `testing-orchestrator.md` / `testing-executor.md` / `testing-reviewer.md` / `testing-loop.md` | 源码冻结 + 三项信号（coverage/mutation/empty-assertion） |
+| `writing` | `writing-orchestrator.md` / `writing-executor.md` / `writing-reviewer.md` / `writing-loop.md` | 写作边界 + 三项信号（术语/链接/示例）+ 弱门禁 |
+
+### 模板查找规则（三级回退）
+
+渲染 `<domain>-<role>` 时按顺序查找：
+
+1. `<domain>-<role>.md`（如 `my-domain-orchestrator.md`）— 领域专属
+2. `ralph-<role>.md`（如 `ralph-orchestrator.md`）— 最通用内核范式
+3. 抛错（避免静默生成 0 文件）
+
+自定义领域**至少能跑**（自动回退到 ralph 内核范式），但要做真正的领域特化必须提供专属模板——参考 programming/testing/writing 的实现方式。
 
 ### 模板格式
 
@@ -540,7 +534,7 @@ permission:
 
 ## 权限模型
 
-forge-loop 为不同角色预定义了工具白名单和权限模式：
+loop-md-cli 为不同角色预定义了工具白名单和权限模式：
 
 ### 角色 → 工具映射
 
@@ -599,6 +593,8 @@ export class MyEditorRenderer implements Renderer {
 ### 添加新领域
 
 在项目根目录下创建 `.opencode/domains/<id>.json` 文件，格式参考 [§自定义领域](#自定义领域) 的 JSON 示例，或参照内置领域的定义（`src/domains.ts` 的 `DOMAINS` 对象）。
+
+要做领域特化（不只是字符串替换），同时提供专属模板 `.opencode/templates/agents/<id>-<role>.md` 和 `.opencode/templates/commands/<id>-loop.md`——参考 programming/testing/writing 的实现方式。不提供专属模板时，自动回退到 ralph 内核范式（仍然能跑，但不会有领域纪律）。
 
 > **自动扫描**：放在 `.opencode/domains/*.json` 的领域文件会被自动发现，`--domain <id>` 直接可用，无需 `--domain-file` 显式指定路径。如果领域文件在别处（如临时调试），用 `--domain-file <path>` 显式传入。
 

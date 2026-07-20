@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { validatePlatform, formatValidateResult } from "../validate.js";
-import { generatePlatform, defaultDomain } from "../generate.js";
-import { AGENTS, COMMANDS } from "../registry.js";
+import { generatePlatform } from "../generate.js";
 
 // ─── Core validation logic tests ───
 
@@ -16,7 +15,7 @@ describe("validatePlatform", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd();
-    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-validate-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-validate-test-"));
     process.chdir(tmpDir);
   });
 
@@ -25,6 +24,7 @@ describe("validatePlatform", () => {
   });
 
   it("reports all files as missing when platform dir does not exist", () => {
+    // 无 domain 时默认回退 ralph → 4 个预期文件（3 agents + 1 command）
     const result = validatePlatform("claude");
     assert.ok(!result.clean, "non-existent dir should report missing files");
     assert.ok(result.issueCount > 0);
@@ -44,16 +44,30 @@ describe("validatePlatform", () => {
     assert.ok(result.issueCount > 0);
   });
 
-  it("totalExpected reflects the number of agent + command entries", () => {
+  it("totalExpected reflects the number of agent + command entries (ralph fallback)", () => {
     generatePlatform("claude");
     const result = validatePlatform("claude");
-    assert.equal(result.totalExpected, 4);
+    assert.equal(result.totalExpected, 4, "ralph fallback = 3 agents + 1 command");
   });
 
   it("domain-specific totalExpected reflects domain entry counts", () => {
     generatePlatform("claude", false, ".opencode/templates", "programming");
     const result = validatePlatform("claude", ".opencode/templates", "programming");
     assert.equal(result.totalExpected, 4);
+  });
+
+  it("no-domain (ralph fallback) detects missing ralph-* files", () => {
+    // 不生成任何文件，直接 validate，应当报 ralph-* missing
+    const result = validatePlatform("claude");
+    const paths = result.issues.map((i) => i.path).sort();
+    assert.ok(
+      paths.some((p) => p.includes("ralph-orchestrator.md")),
+      "missing list should include ralph-orchestrator.md (ralph fallback)",
+    );
+    assert.ok(
+      paths.some((p) => p.includes("ralph-loop.md")),
+      "missing list should include ralph-loop.md (ralph fallback)",
+    );
   });
 });
 
@@ -79,8 +93,8 @@ describe("formatValidateResult", () => {
       domain: "programming",
       totalExpected: 4,
       issues: [
-        { path: ".claude/agents/orchestrator.md", type: "stale" as const, message: "第 3 行不一致" },
-        { path: ".claude/commands/loop.md", type: "missing" as const, message: "预期文件不存在于磁盘" },
+        { path: ".claude/agents/code-orchestrator.md", type: "stale" as const, message: "第 3 行不一致" },
+        { path: ".claude/commands/code-loop.md", type: "missing" as const, message: "预期文件不存在于磁盘" },
       ],
       issueCount: 2,
       clean: false,
@@ -105,41 +119,5 @@ describe("formatValidateResult", () => {
     };
     const output = formatValidateResult(result);
     assert.ok(output.includes("多余"));
-  });
-});
-
-// ─── 缺陷 E 回归：defaultDomain 与 AGENTS/COMMANDS 单一真相源同步 ───
-// 旧实现 validate.ts 硬编码了一份描述，与 generate.ts 的 defaultDomain 各自维护。
-// 现在两路都复用 generate.ts 导出的 defaultDomain()，描述统一从 registry 取。
-// 这条测试确保未来有人改 registry 的描述时，defaultDomain 自动跟随——
-// 如果有人重新引入硬编码分支，测试会立即失败。
-describe("defaultDomain (single source of truth)", () => {
-  it("agent descriptions match AGENTS registry", () => {
-    const d = defaultDomain();
-    for (const a of d.agents) {
-      assert.equal(
-        a.description,
-        AGENTS[a.role].description,
-        `defaultDomain agent "${a.name}" description must match AGENTS["${a.role}"]`,
-      );
-    }
-  });
-
-  it("command description matches COMMANDS registry", () => {
-    const d = defaultDomain();
-    for (const c of d.commands) {
-      // defaultDomain 的 command name 是 "loop"，对应 COMMANDS.loop
-      assert.equal(
-        c.description,
-        COMMANDS.loop.description,
-        "defaultDomain loop command description must match COMMANDS.loop",
-      );
-    }
-  });
-
-  it("uses role names as agent names in default (no-domain) mode", () => {
-    const d = defaultDomain();
-    const names = d.agents.map((a) => a.name).sort();
-    assert.deepEqual(names, ["executor", "orchestrator", "reviewer"]);
   });
 });

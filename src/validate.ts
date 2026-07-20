@@ -13,13 +13,22 @@ import { join } from "node:path";
 
 import { PLATFORMS, type Platform } from "./platforms.js";
 import { resolveDomains, findDomain } from "./domain-loader.js";
-import { renderAgent, renderCommand, renderBackpressure, defaultDomain, type RenderedAgent, type RenderedCommand } from "./generate.js";
+import { DEFAULT_DOMAIN_ID } from "./registry.js";
+import { loadAgentTemplates, loadCommandTemplates, loadTemplateFiles } from "./template.js";
+import {
+  renderAgentWithTemplates,
+  renderCommandWithTemplates,
+  RENDERERS,
+  renderBackpressure,
+  type RenderedAgent,
+  type RenderedCommand,
+} from "./generate.js";
 
 // ── 验证结果 ──
 
 export interface FileIssue {
   path: string;
-  type: "stale" | "extra" | "missing";
+  type: "stale" | "missing" | "extra";
   message: string;
 }
 
@@ -28,9 +37,7 @@ export interface ValidateResult {
   domain?: string;
   totalExpected: number;
   issues: FileIssue[];
-  /** 0 = 无问题，>0 = 有问题 */
   issueCount: number;
-  /** 所有平台都干净才为 true */
   clean: boolean;
 }
 
@@ -52,10 +59,12 @@ function compareFile(expected: string, actualPath: string): string | null {
     const minLen = Math.min(expLines.length, actLines.length);
     for (let i = 0; i < minLen; i++) {
       if (expLines[i] !== actLines[i]) {
-        return `第 ${i + 1} 行不一致`;
+        const expLine = expLines[i].length > 80 ? expLines[i].slice(0, 80) + "..." : expLines[i];
+        const actLine = actLines[i].length > 80 ? actLines[i].slice(0, 80) + "..." : actLines[i];
+        return `第 ${i + 1} 行不一致\n  - 预期: ${expLine}\n  + 实际: ${actLine}`;
       }
     }
-    return expLines.length !== actLines.length ? "行数不一致" : null;
+    return `行数不一致: 预期 ${expLines.length} 行, 实际 ${actLines.length} 行`;
   } catch {
     return "无法读取文件";
   }
@@ -78,27 +87,37 @@ export function validatePlatform(
   const commandsDir = join(base, "commands");
 
   const resolvedDomains = resolveDomains(domainFiles, cwd);
-  // 无 domain 时复用 generate.ts 的 defaultDomain()（单一真相源），避免两路硬编码描述漂移。
-  // 渲染时 renderDomainId 传 undefined（__default__ id 只用于内部识别，不参与模板 lookup）。
-  const resolvedDomain = domain ? findDomain(resolvedDomains, domain) : defaultDomain();
-  const renderDomainId = resolvedDomain.id === "__default__" ? undefined : resolvedDomain.id;
+  // 无 domain 时回退到 ralph 内核范式
+  const effectiveDomainId = domain ?? DEFAULT_DOMAIN_ID;
+  const resolvedDomain = findDomain(resolvedDomains, effectiveDomainId);
+  const renderDomainId = resolvedDomain.id;
+
+  // ── 加载模板（一次加载，避免 loops 内重复读盘） ──
+  const renderer = RENDERERS[platform.family];
+  const templatesBase = join(cwd, templatesRoot);
+  const userAgentTemplates = loadTemplateFiles(join(templatesBase, "agents"));
+  const pkgAgentTemplates = loadAgentTemplates();
+  const agentTemplates = { ...pkgAgentTemplates, ...userAgentTemplates };
+  const userCommandTemplates = loadTemplateFiles(join(templatesBase, "commands"));
+  const pkgCommandTemplates = loadCommandTemplates();
+  const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
 
   const issues: FileIssue[] = [];
 
   // ── 生成预期 agent 列表 ──
-  // 注意：渲染必须与 generate.ts 的 generatePlatform 完全一致，包括 backpressure 注入，
-  // 否则 validate 会误报 stale。orchestrator 角色注入断路器段，其他角色传空。
   const bpText = renderBackpressure(resolvedDomain.backpressure);
   const expectedAgents: RenderedAgent[] = [];
   for (const a of resolvedDomain.agents) {
     const agentBp = a.role === "orchestrator" ? bpText : "";
-    expectedAgents.push(renderAgent(platformKey, a.name, a.description, a.role, templatesRoot, cwd, renderDomainId, agentBp));
+    expectedAgents.push(
+      renderAgentWithTemplates(renderer, platform, a.name, a.description, a.role, agentTemplates, renderDomainId, agentBp),
+    );
   }
 
   const expectedCommands: RenderedCommand[] = [];
   for (const c of resolvedDomain.commands) {
     expectedCommands.push(
-      renderCommand(platformKey, c.name, c.description, c.agent, templatesRoot, cwd, renderDomainId, resolvedDomain.engine.type),
+      renderCommandWithTemplates(renderer, platform, c.name, c.description, c.agent, commandTemplates, renderDomainId, resolvedDomain.engine.type),
     );
   }
 
@@ -159,6 +178,7 @@ export function validatePlatform(
     clean: issues.length === 0,
   };
 }
+
 
 // ── 格式化输出 ──
 

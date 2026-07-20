@@ -18,44 +18,18 @@
  * 关系：用户 → /entry (command) → orchestrator (agent) → executor + reviewer (agents)
  *       命令显式声明：commands[].agent = "xxx-orchestrator"
  *
- * 角色/类型的具体名称与描述由领域（domains.ts）提供；
- * 无 domain 时使用角色名作为输出文件，描述用此处的默认描述。
+ * 领域差异通过模板 + domains.ts 的 description 表达；本注册表只承载"工程范式 vocabulary"。
+ * 不再保留 default 通用模板路径——无 --domain 时回退到 ralph 内核范式。
  */
 
-export interface AgentMeta {
-  description: string;
-}
-
-export interface CommandMeta {
-  description: string;
-}
-
-// ── 默认 Agent 三角色（无 domain 时使用） ──
-export const AGENTS: Record<string, AgentMeta> = {
-  orchestrator: {
-    description: "Loop 主控 Agent。规划执行边界、委派执行者/审查者，根据真实门禁决定停止。",
-  },
-  executor: {
-    description: "Loop 执行者 Agent。在声明边界内执行业务产出，按根因分组修改并运行真实验证。",
-  },
-  reviewer: {
-    description: "Loop 只读质量阀。复核执行者产出与变更，输出可机器路由的 JSON verdict/issues。",
-  },
-};
-
-// ── 默认 command 模板描述（kind="entry" 的默认描述） ──
-// 注：模板文件命名约定保留 `loop.md` / `ralph-loop.md`（作为"为 loop 引擎写的入口"语义约定），
-// 但 schema 上 commands[].kind="entry"。lookup key 用 "loop" 保持向后兼容。
-export const COMMANDS: Record<string, CommandMeta> = {
-  loop: {
-    description: "Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",
-  },
-};
-
-export const AGENT_ROLES = Object.keys(AGENTS);
+/** Agent 三角色的合法取值。 */
+export const AGENT_ROLES = ["orchestrator", "executor", "reviewer"];
 
 /** 领域工程范式（engine.type）的合法取值。当前仅支持 loop = 循环工程设计。 */
 export const ENGINE_TYPES: string[] = ["loop"];
 
 /** Command kind 的合法取值。entry = engine 入口触发器。 */
 export const COMMAND_KINDS: string[] = ["entry"];
+
+/** 无 --domain 时使用的默认领域 id。ralph 是最通用的内核范式。 */
+export const DEFAULT_DOMAIN_ID = "ralph";

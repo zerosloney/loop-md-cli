@@ -14,7 +14,7 @@ describe("generatePlatform integration", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd();
-    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-gen-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-gen-test-"));
     process.chdir(tmpDir);
   });
 
@@ -37,41 +37,43 @@ describe("generatePlatform integration", () => {
     assert.throws(() => generatePlatform("nonexistent-platform"), /未知平台/);
   });
 
-  // ─── Test: named family (claude) generates correct files ───
+  // ─── Test: 无 --domain 时回退到 ralph（最通用的内核范式）───
 
-  it("named family generates agents and commands with correct frontmatter", () => {
+  it("no domain falls back to ralph (named family)", () => {
     const result = generatePlatform("claude");
 
     assert.equal(result.agents, 3, "expected 3 agents");
     assert.equal(result.commands, 1, "expected 1 command");
 
     const agentFiles = listFiles(join(process.cwd(), ".claude/agents"));
-    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+    assert.deepEqual(
+      agentFiles,
+      ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"],
+      "no-domain should fall back to ralph-* agent files",
+    );
 
     const commandFiles = listFiles(join(process.cwd(), ".claude/commands"));
-    assert.deepEqual(commandFiles, ["loop.md"]);
+    assert.deepEqual(commandFiles, ["ralph-loop.md"], "no-domain should fall back to ralph-loop command");
 
-    const agentContent = readFile(".claude/agents/orchestrator.md");
+    const agentContent = readFile(".claude/agents/ralph-orchestrator.md");
     assert.ok(agentContent.startsWith("---"), "agent file should start with frontmatter delimiter");
-    assert.ok(agentContent.includes("name: orchestrator"), "should contain name: orchestrator");
+    assert.ok(agentContent.includes("name: ralph-orchestrator"), "should contain name: ralph-orchestrator");
     assert.ok(agentContent.includes("description:"), "should contain description");
   });
 
-  // ─── Test: mode family (opencode) generates correct files ───
-
-  it("mode family generates agents and commands with mode-style frontmatter", () => {
+  it("no domain falls back to ralph (mode family, opencode)", () => {
     const result = generatePlatform("opencode");
 
     assert.equal(result.agents, 3, "expected 3 agents");
     assert.equal(result.commands, 1, "expected 1 command");
 
     const agentFiles = listFiles(join(process.cwd(), ".opencode/agents"));
-    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
 
     const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
-    assert.deepEqual(commandFiles, ["loop.md"]);
+    assert.deepEqual(commandFiles, ["ralph-loop.md"]);
 
-    const agentContent = readFile(".opencode/agents/orchestrator.md");
+    const agentContent = readFile(".opencode/agents/ralph-orchestrator.md");
     assert.ok(agentContent.startsWith("---"), "agent file should start with frontmatter delimiter");
     assert.ok(agentContent.includes("description:"), "mode family should have description");
     assert.ok(agentContent.includes("mode: subagent"), "should have mode field");
@@ -81,15 +83,18 @@ describe("generatePlatform integration", () => {
   // ─── Test: codebuddy family generates correct files ───
 
   it("codebuddy family adds model:inherit and permissionMode", () => {
+    // 默认（无 domain）回退 ralph → executor 名 = ralph-worker → permissionMode: acceptEdits
     const result = generatePlatform("codebuddy");
 
     assert.equal(result.agents, 3, "expected 3 agents");
     assert.equal(result.commands, 1, "expected 1 command");
 
-    // Without domain, agent name is "executor" → role=executor → permissionMode: acceptEdits
-    const executorContent = readFile(".codebuddy/agents/executor.md");
-    assert.ok(executorContent.includes("model: inherit"), "should have model: inherit");
-    assert.ok(executorContent.includes("permissionMode: acceptEdits"), "executor should have permissionMode: acceptEdits");
+    const workerContent = readFile(".codebuddy/agents/ralph-worker.md");
+    assert.ok(workerContent.includes("model: inherit"), "should have model: inherit");
+    assert.ok(
+      workerContent.includes("permissionMode: acceptEdits"),
+      "ralph-worker should have permissionMode: acceptEdits",
+    );
 
     // With domain "programming", executor name becomes "code-builder" → permissionMode: acceptEdits
     generatePlatform("codebuddy", false, ".opencode/templates", "programming");
@@ -110,11 +115,11 @@ describe("generatePlatform integration", () => {
     assert.equal(result.commands, 1, "expected 1 command");
 
     const agentFiles = listFiles(join(process.cwd(), ".trae/agents"));
-    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
 
     // Trae command should have name field
-    const commandContent = readFile(".trae/commands/loop.md");
-    assert.ok(commandContent.includes("name: loop"), "trae command should have name field");
+    const commandContent = readFile(".trae/commands/ralph-loop.md");
+    assert.ok(commandContent.includes("name: ralph-loop"), "trae command should have name field");
   });
 
   // ─── Test: dry-run mode does not write files ───
@@ -187,6 +192,7 @@ describe("generatePlatform integration", () => {
   });
 
   // ─── Test: custom user templates override package templates ───
+  // 用户模板覆盖机制：放 .opencode/templates/agents/<domain>-<role>.md 即可覆盖内置
 
   it("user templates override package templates", () => {
     const userTemplatesDir = join(process.cwd(), "custom-templates");
@@ -196,12 +202,10 @@ describe("generatePlatform integration", () => {
     mkdirSync(agentsDir, { recursive: true });
     mkdirSync(commandsDir, { recursive: true });
 
-    // Write custom templates with a unique marker in the BODY (not frontmatter).
-    // The renderer reconstructs frontmatter from src.name/description, so markers
-    // in the original frontmatter are lost. Markers in the body survive.
+    // 写自定义 ralph-* 模板（无 domain 时默认走 ralph，所以覆盖 ralph-* 即可影响默认路径）
     for (const role of ["orchestrator", "executor", "reviewer"]) {
       writeFileSync(
-        join(agentsDir, `${role}.md`),
+        join(agentsDir, `ralph-${role}.md`),
         [
           "---",
           "name: {{name}}",
@@ -215,30 +219,26 @@ describe("generatePlatform integration", () => {
       );
     }
 
-    // Write a minimal loop command template
+    // Write a minimal ralph-loop command template
     writeFileSync(
-      join(commandsDir, "loop.md"),
+      join(commandsDir, "ralph-loop.md"),
       [
         "---",
         "description: {{description}}",
         "---",
         "",
-        "# Custom Loop",
+        "# Custom Ralph Loop",
       ].join("\n"),
       "utf-8",
     );
 
-    try {
-      const result = generatePlatform("claude", false, "custom-templates");
+    const result = generatePlatform("claude", false, "custom-templates");
 
-      assert.equal(result.agents, 3, "expected 3 agents with custom templates");
+    assert.equal(result.agents, 3, "expected 3 agents with custom templates");
 
-      const content = readFile(".claude/agents/orchestrator.md");
-      assert.ok(content.includes("MARKER:user-template-override"), "should use user template override in body");
-      assert.ok(content.includes("# Custom orchestrator Agent"), "should use custom body content");
-    } finally {
-      // tmp dir auto-cleans; nothing to do
-    }
+    const content = readFile(".claude/agents/ralph-orchestrator.md");
+    assert.ok(content.includes("MARKER:user-template-override"), "should use user template override in body");
+    assert.ok(content.includes("# Custom ralph-orchestrator Agent"), "should use custom body content");
   });
 
   // ─── Test: all families produce valid frontmatter ───
@@ -275,7 +275,7 @@ describe("generatePlatform integration", () => {
     assert.equal(result.commands, 1);
 
     const agentFiles = listFiles(join(process.cwd(), ".omp/agents"));
-    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
   });
 
   it("qoder platform generates correctly", () => {
@@ -285,7 +285,7 @@ describe("generatePlatform integration", () => {
     assert.equal(result.commands, 1);
 
     const commandFiles = listFiles(join(process.cwd(), ".qoder/commands"));
-    assert.deepEqual(commandFiles, ["loop.md"]);
+    assert.deepEqual(commandFiles, ["ralph-loop.md"]);
   });
 
   // ─── Test: kilo platform generates correctly ───
@@ -297,26 +297,26 @@ describe("generatePlatform integration", () => {
     assert.equal(result.commands, 1);
 
     const agentFiles = listFiles(join(process.cwd(), ".kilo/agents"));
-    assert.deepEqual(agentFiles, ["executor.md", "orchestrator.md", "reviewer.md"]);
+    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
   });
 
   // ─── Test: agent files contain body content from templates ───
 
-  it("generated agent files contain markdown body content", () => {
+  it("generated agent files contain markdown body content (ralph default)", () => {
     generatePlatform("claude");
 
-    const content = readFile(".claude/agents/orchestrator.md");
+    const content = readFile(".claude/agents/ralph-orchestrator.md");
     assert.ok(content.includes("## 角色"), "should contain role section heading");
-    assert.ok(content.includes("Loop 主控 Agent"), "should contain description text");
+    assert.ok(content.includes("Ralph Loop 主控 Agent"), "should contain ralph description text");
   });
 
   // ─── Test: command files contain markdown body content ───
 
-  it("generated command files contain markdown body content", () => {
+  it("generated command files contain markdown body content (ralph default)", () => {
     generatePlatform("opencode");
 
-    const content = readFile(".opencode/commands/loop.md");
-    assert.ok(content.includes("# Loop"), "should contain loop heading");
+    const content = readFile(".opencode/commands/ralph-loop.md");
+    assert.ok(content.includes("# Ralph Loop"), "should contain ralph loop heading");
   });
 
   // ─── Test: output directory structure ───
@@ -362,6 +362,46 @@ describe("generatePlatform integration", () => {
 
     const content = readFile(".claude/agents/test-writer.md");
     assert.ok(content.includes("Test-Loop 中唯一可以编写测试代码"), "should have testing domain description");
+  });
+
+  // ─── Test: programming/testing/writing 模板正文 enforce 各自纪律 ───
+
+  it("programming template enforces root-cause grouping + scope drift ban", () => {
+    generatePlatform("claude", false, ".opencode/templates", "programming");
+
+    const orc = readFile(".claude/agents/code-orchestrator.md");
+    assert.ok(orc.includes("根因分组"), "programming orchestrator must enforce root-cause grouping");
+    assert.ok(orc.includes("scope drift"), "programming orchestrator must mention scope drift");
+
+    const exec = readFile(".claude/agents/code-builder.md");
+    assert.ok(exec.includes("根因分组"), "programming executor must mention root-cause grouping");
+    assert.ok(exec.includes("forbidden_scope"), "programming executor must enforce forbidden_scope");
+  });
+
+  it("testing template enforces source-freeze + coverage/mutation/empty-assertion", () => {
+    generatePlatform("claude", false, ".opencode/templates", "testing");
+
+    const orc = readFile(".claude/agents/test-orchestrator.md");
+    assert.ok(orc.includes("源码冻结"), "testing orchestrator must enforce source freeze");
+    assert.ok(orc.includes("coverage.lines"), "testing orchestrator must reference coverage threshold");
+    assert.ok(orc.includes("mutation_score"), "testing orchestrator must reference mutation score");
+    assert.ok(orc.includes("empty_assertions_count"), "testing orchestrator must reference empty-assertion count");
+
+    const exec = readFile(".claude/agents/test-writer.md");
+    assert.ok(exec.includes("源码冻结"), "testing executor must mention source freeze as first rule");
+    assert.ok(exec.includes("源码冻结") && exec.includes("唯一可以编写测试代码"), "testing executor must reinforce writer-only role");
+  });
+
+  it("writing template enforces terminology/links/code-example signals", () => {
+    generatePlatform("claude", false, ".opencode/templates", "writing");
+
+    const orc = readFile(".claude/agents/writing-orchestrator.md");
+    assert.ok(orc.includes("terminology_drift_count"), "writing orchestrator must reference terminology drift");
+    assert.ok(orc.includes("broken_links_count"), "writing orchestrator must reference broken links");
+    assert.ok(orc.includes("code_example_errors"), "writing orchestrator must reference code example errors");
+    // writing 不应包含 SE 偏向
+    assert.ok(!orc.includes("detected_stack"), "writing orchestrator must NOT reference SE-specific detected_stack");
+    assert.ok(!orc.includes("scripts_gap"), "writing orchestrator must NOT reference scripts_gap");
   });
 
   // ─── Test: backpressure 通用化（所有领域都带断路器）───
@@ -446,43 +486,36 @@ describe("generatePlatform integration", () => {
       content.includes("agent: test-orchestrator"),
       "command should bind to its declared agent, not derive from name",
     );
-    // 反例：旧 -loop 后缀派生会得到 "test-orchestrator"（巧合）
-    // 这里验证显式声明路径，ralph 领域反过来就能区分：
-    // ralph-loop 的 command.agent = "ralph-orchestrator"
   });
 
   it("ralph command binds via command.agent not by -loop suffix derivation", () => {
     // ralph 领域：command = "ralph-loop", command.agent = "ralph-orchestrator"
-    // 用 opencode 平台（mode 族，frontmatter 含 agent 字段）测 {{agent}} 取值
     generatePlatform("opencode", false, ".opencode/templates", "ralph");
 
     const content = readFile(".opencode/commands/ralph-loop.md");
     assert.ok(content.includes("agent: ralph-orchestrator"), "should bind to ralph-orchestrator via command.agent");
   });
 
-  it("default (no domain) command binds to orchestrator via default domain", () => {
-    // 无 domain 时：defaultDomain 提供 { kind: "entry", agent: "orchestrator", name: "loop" }
-    // 用 opencode 平台（mode 族）测 {{agent}} 取值
+  it("default (no domain) command falls back to ralph-loop binding ralph-orchestrator", () => {
+    // 无 domain 时：默认走 ralph，command = "ralph-loop"，command.agent = "ralph-orchestrator"
     generatePlatform("opencode", false, ".opencode/templates");
 
-    const content = readFile(".opencode/commands/loop.md");
+    const content = readFile(".opencode/commands/ralph-loop.md");
     assert.ok(
-      content.includes("agent: orchestrator"),
-      "default command should bind to orchestrator via defaultDomain",
+      content.includes("agent: ralph-orchestrator"),
+      "no-domain should fall back to ralph, binding ralph-orchestrator",
     );
   });
 
   // ─── 缺陷 1 回归：reviewer 角色（任意领域名）必须拿到只读工具白名单 ───
-  // 旧实现按 agent name 索引，导致 writing-reviewer / ralph-reviewer / 无 domain 的 reviewer
-  // 在 named/codebuddy/trae 族下没有任何工具限制，违反 README 明文承诺的"只读审查"。
 
-  it("default (no domain) reviewer gets read-only tools (named family)", () => {
+  it("default (no domain) reviewer gets read-only tools via ralph fallback (named family)", () => {
     generatePlatform("claude", false, ".opencode/templates");
 
-    const content = readFile(".claude/agents/reviewer.md");
+    const content = readFile(".claude/agents/ralph-reviewer.md");
     assert.ok(
       content.includes("tools: Read, Grep, Glob, Bash"),
-      "no-domain reviewer should still be read-only (was unguarded before defect-1 fix)",
+      "no-domain reviewer (ralph fallback) should still be read-only",
     );
   });
 
@@ -492,7 +525,7 @@ describe("generatePlatform integration", () => {
     const content = readFile(".claude/agents/writing-reviewer.md");
     assert.ok(
       content.includes("tools: Read, Grep, Glob, Bash"),
-      "writing-reviewer must have read-only tools (was unguarded before defect-1 fix)",
+      "writing-reviewer must have read-only tools",
     );
   });
 
@@ -513,7 +546,7 @@ describe("generatePlatform integration", () => {
     const content = readFile(".codebuddy/agents/writing-reviewer.md");
     assert.ok(
       content.includes("permissionMode: plan"),
-      "writing-reviewer on codebuddy must get plan mode (was default before defect-1 fix)",
+      "writing-reviewer on codebuddy must get plan mode",
     );
     assert.ok(
       content.includes("tools: Read, Grep, Glob, Bash"),
@@ -522,8 +555,7 @@ describe("generatePlatform integration", () => {
   });
 
   // ─── 缺陷 3 回归：incremental 切换领域时必须清理孤儿文件 ───
-  // 旧实现 incremental 完全不扫描 manifest 里的孤儿，导致 ralph → default 切换后
-  // ralph-*.md 永久残留。修复后 incremental 应当 prune manifest 记录过、但本次 expected 没有的文件。
+  // ralph → programming 切换后，ralph-*.md 必须被清理
 
   it("incremental mode prunes orphan files when switching domains", () => {
     // 第一轮：用 ralph 领域 incremental 生成
@@ -535,13 +567,13 @@ describe("generatePlatform integration", () => {
       "ralph domain should produce 3 ralph-* agents",
     );
 
-    // 第二轮：切到默认领域 incremental 生成
-    generatePlatform("claude", false, ".opencode/templates", undefined, [], true);
-    const afterDefault = listFiles(join(process.cwd(), ".claude/agents"));
+    // 第二轮：切到 programming 领域 incremental 生成
+    generatePlatform("claude", false, ".opencode/templates", "programming", [], true);
+    const afterProgramming = listFiles(join(process.cwd(), ".claude/agents"));
     assert.deepEqual(
-      afterDefault,
-      ["executor.md", "orchestrator.md", "reviewer.md"],
-      "switching back to default must prune ralph-* orphans (was retained before defect-3 fix)",
+      afterProgramming,
+      ["code-builder.md", "code-orchestrator.md", "code-reviewer.md"],
+      "switching ralph → programming must prune ralph-* orphans",
     );
   });
 });

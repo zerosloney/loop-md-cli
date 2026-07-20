@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * forge-loop CLI
+ * loop-md-cli CLI
  *
  * 用法:
- *   forge-loop --help                    # 显示帮助信息
- *   forge-loop --version                 # 显示版本号
- *   forge-loop --all                     # 生成所有平台
- *   forge-loop --list                    # 列出支持的平台
- *   forge-loop                           # 交互选择平台（非 TTY 报错）
- *   forge-loop --validate --claude       # 验证 claude 配置
- *   forge-loop --watch --claude          # 监听模式，自动重新生成
- *   forge-loop --incremental --claude    # 增量生成（仅更新变化文件）
- *   forge-loop --archive configs.zip     # 导出为 ZIP 压缩包
- *   forge-loop --opencode --domain programming           # 领域化生成
- *   forge-loop --opencode --domain-file ./my.json       # 自定义领域文件
- *   forge-loop --opencode --dry-run                     # 演练，不写盘
+ *   loop-md-cli --help                    # 显示帮助信息
+ *   loop-md-cli --version                 # 显示版本号
+ *   loop-md-cli --all                     # 生成所有平台
+ *   loop-md-cli --list                    # 列出支持的平台
+ *   loop-md-cli                           # 交互选择平台（非 TTY 报错）
+ *   loop-md-cli --validate --claude       # 验证 claude 配置
+ *   loop-md-cli --watch --claude          # 监听模式，自动重新生成
+ *   loop-md-cli --incremental --claude    # 增量生成（仅更新变化文件）
+ *   loop-md-cli --archive configs.zip     # 导出为 ZIP 压缩包
+ *   loop-md-cli --opencode --domain programming           # 领域化生成
+ *   loop-md-cli --opencode --domain-file ./my.json       # 自定义领域文件
+ *   loop-md-cli --opencode --dry-run                     # 演练，不写盘
  *
  * 模板系统（template.ts）+ 领域注册表（domains.ts）是默认源；
- * 无 domain 时回退到角色名直出。零运行时依赖。
+ * 无 --domain 时回退到 ralph 内核范式（最通用的 loop 形态）。零运行时依赖。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,10 +45,10 @@ try {
 
 function printHelp(): void {
   const help = [
-    "forge-loop — 从单一源生成多平台 AI 编码 agent/command 配置",
+    "loop-md-cli — 从单一源生成多平台 AI 编码 agent/command 配置",
     "",
     "用法:",
-    "  forge-loop [选项]",
+    "  loop-md-cli [选项]",
     "",
     "选项:",
     "  --help, -h              显示此帮助信息",
@@ -60,7 +60,7 @@ function printHelp(): void {
     "  --all, -a               生成所有支持的平台",
     "  --list, -l              列出支持的平台",
     "  --dry-run, -n           演练模式，不实际写入文件",
-    "  --domain, -d <id>       使用指定领域（builtin: programming, testing, writing）",
+    "  --domain, -d <id>       使用指定领域（builtin: ralph, programming, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
     "平台选项（可与 --all 互斥，也可单独指定）:",
@@ -73,18 +73,18 @@ function printHelp(): void {
     "  --trae                  Trae IDE (.trae/)",
     "",
     "示例:",
-    "  forge-loop --all                        # 生成所有平台",
-    "  forge-loop --claude --opencode          # 生成指定平台",
-    "  forge-loop --opencode --domain testing  # 使用测试领域生成",
-    "  forge-loop --opencode --dry-run         # 演练模式预览输出",
-    "  forge-loop --validate --all             # 验证所有平台配置",
-    "  forge-loop --validate --claude -d programming  # 验证编程领域 claude 配置",
-    "  forge-loop --watch --all                # 监听所有平台变化",
-    "  forge-loop --watch --claude -d writing  # 监听 claude + writing 领域",
-    "  forge-loop --incremental --all          # 增量生成所有平台",
-    "  forge-loop --archive configs.zip        # 导出所有平台为 ZIP",
-    "  forge-loop --archive configs.zip -d programming  # 导出编程领域",
-    "  forge-loop --help                       # 显示帮助",
+    "  loop-md-cli --all                        # 生成所有平台",
+    "  loop-md-cli --claude --opencode          # 生成指定平台",
+    "  loop-md-cli --opencode --domain testing  # 使用测试领域生成",
+    "  loop-md-cli --opencode --dry-run         # 演练模式预览输出",
+    "  loop-md-cli --validate --all             # 验证所有平台配置",
+    "  loop-md-cli --validate --claude -d programming  # 验证编程领域 claude 配置",
+    "  loop-md-cli --watch --all                # 监听所有平台变化",
+    "  loop-md-cli --watch --claude -d writing  # 监听 claude + writing 领域",
+    "  loop-md-cli --incremental --all          # 增量生成所有平台",
+    "  loop-md-cli --archive configs.zip        # 导出所有平台为 ZIP",
+    "  loop-md-cli --archive configs.zip -d programming  # 导出编程领域",
+    "  loop-md-cli --help                       # 显示帮助",
     "",
   ];
   console.log(help.join("\n"));
@@ -135,9 +135,12 @@ function parseArgs(argv: string[]): Args {
     } else if (tok === "--incremental" || tok === "-i") {
       args.incremental = true;
     } else if (tok === "--archive" || tok === "-o") {
-      if (i + 1 < argv.length) {
+      if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
         args.archive = argv[i + 1];
         i++;
+      } else {
+        console.error("错误: --archive (-o) 需要指定输出路径。");
+        process.exit(1);
       }
     } else if (tok === "--all" || tok === "-a") {
       args.all = true;
@@ -278,7 +281,7 @@ function main(): void {
     }
     const totalIssues = runValidate(selected, args.domain || undefined, args.domainFiles);
     if (totalIssues > 0) {
-      console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 forge-loop --all 重新生成。`);
+      console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 loop-md-cli --all 重新生成。`);
       process.exit(1);
     }
     console.log("所有平台配置与模板一致。");
