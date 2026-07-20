@@ -97,7 +97,7 @@ describe("exportArchive", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-export-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-export-test-"));
     // 把模板复制到临时目录，generatePlatform 在任意 cwd 下都能找到
     copyTemplatesTo(join(tmpDir, ".opencode", "templates"));
   });

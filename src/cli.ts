@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * loop-forge CLI
+ * forge-loop CLI
  *
  * 用法:
- *   loop-forge --help                    # 显示帮助信息
- *   loop-forge --version                 # 显示版本号
- *   loop-forge --all                     # 生成所有平台
- *   loop-forge --list                    # 列出支持的平台
- *   loop-forge                           # 交互选择平台（非 TTY 报错）
- *   loop-forge --validate --claude       # 验证 claude 配置
- *   loop-forge --watch --claude          # 监听模式，自动重新生成
- *   loop-forge --incremental --claude    # 增量生成（仅更新变化文件）
- *   loop-forge --archive configs.zip     # 导出为 ZIP 压缩包
- *   loop-forge --opencode --domain programming           # 领域化生成
- *   loop-forge --opencode --domain-file ./my.json       # 自定义领域文件
- *   loop-forge --opencode --dry-run                     # 演练，不写盘
+ *   forge-loop --help                    # 显示帮助信息
+ *   forge-loop --version                 # 显示版本号
+ *   forge-loop --all                     # 生成所有平台
+ *   forge-loop --list                    # 列出支持的平台
+ *   forge-loop                           # 交互选择平台（非 TTY 报错）
+ *   forge-loop --validate --claude       # 验证 claude 配置
+ *   forge-loop --watch --claude          # 监听模式，自动重新生成
+ *   forge-loop --incremental --claude    # 增量生成（仅更新变化文件）
+ *   forge-loop --archive configs.zip     # 导出为 ZIP 压缩包
+ *   forge-loop --opencode --domain programming           # 领域化生成
+ *   forge-loop --opencode --domain-file ./my.json       # 自定义领域文件
+ *   forge-loop --opencode --dry-run                     # 演练，不写盘
  *
  * 模板系统（template.ts）+ 领域注册表（domains.ts）是默认源；
  * 无 domain 时回退到角色名直出。零运行时依赖。
@@ -45,10 +45,10 @@ try {
 
 function printHelp(): void {
   const help = [
-    "loop-forge — 从单一源生成多平台 AI 编码 agent/command 配置",
+    "forge-loop — 从单一源生成多平台 AI 编码 agent/command 配置",
     "",
     "用法:",
-    "  loop-forge [选项]",
+    "  forge-loop [选项]",
     "",
     "选项:",
     "  --help, -h              显示此帮助信息",
@@ -73,18 +73,18 @@ function printHelp(): void {
     "  --trae                  Trae IDE (.trae/)",
     "",
     "示例:",
-    "  loop-forge --all                        # 生成所有平台",
-    "  loop-forge --claude --opencode          # 生成指定平台",
-    "  loop-forge --opencode --domain testing  # 使用测试领域生成",
-    "  loop-forge --opencode --dry-run         # 演练模式预览输出",
-    "  loop-forge --validate --all             # 验证所有平台配置",
-    "  loop-forge --validate --claude -d programming  # 验证编程领域 claude 配置",
-    "  loop-forge --watch --all                # 监听所有平台变化",
-    "  loop-forge --watch --claude -d writing  # 监听 claude + writing 领域",
-    "  loop-forge --incremental --all          # 增量生成所有平台",
-    "  loop-forge --archive configs.zip        # 导出所有平台为 ZIP",
-    "  loop-forge --archive configs.zip -d programming  # 导出编程领域",
-    "  loop-forge --help                       # 显示帮助",
+    "  forge-loop --all                        # 生成所有平台",
+    "  forge-loop --claude --opencode          # 生成指定平台",
+    "  forge-loop --opencode --domain testing  # 使用测试领域生成",
+    "  forge-loop --opencode --dry-run         # 演练模式预览输出",
+    "  forge-loop --validate --all             # 验证所有平台配置",
+    "  forge-loop --validate --claude -d programming  # 验证编程领域 claude 配置",
+    "  forge-loop --watch --all                # 监听所有平台变化",
+    "  forge-loop --watch --claude -d writing  # 监听 claude + writing 领域",
+    "  forge-loop --incremental --all          # 增量生成所有平台",
+    "  forge-loop --archive configs.zip        # 导出所有平台为 ZIP",
+    "  forge-loop --archive configs.zip -d programming  # 导出编程领域",
+    "  forge-loop --help                       # 显示帮助",
     "",
   ];
   console.log(help.join("\n"));
@@ -278,7 +278,7 @@ function main(): void {
     }
     const totalIssues = runValidate(selected, args.domain || undefined, args.domainFiles);
     if (totalIssues > 0) {
-      console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 loop-forge --all 重新生成。`);
+      console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 forge-loop --all 重新生成。`);
       process.exit(1);
     }
     console.log("所有平台配置与模板一致。");

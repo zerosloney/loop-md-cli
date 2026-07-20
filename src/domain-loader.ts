@@ -9,7 +9,7 @@
  *
  * 设计目的：把"团队共享领域文件"和"工具自己的 manifest 缓存"物理隔离——
  * 领域文件放 .opencode/domains/（与模板同根，提交进 git），
- * manifest 缓存放 .loop-forge/cache/（成员本机，gitignore）。
+ * manifest 缓存放 .forge-loop/cache/（成员本机，gitignore）。
  */
 
 import { readdirSync, existsSync } from "node:fs";

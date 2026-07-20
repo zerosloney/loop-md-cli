@@ -14,7 +14,7 @@ describe("generatePlatform integration", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd();
-    tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-gen-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-gen-test-"));
     process.chdir(tmpDir);
   });
 

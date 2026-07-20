@@ -1,8 +1,8 @@
-# loop-forge
+# forge-loop
 
 > 从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Code-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。
 
-loop-forge 让你**一次编写模板，到处部署**——将统一的 agent/command 定义自动转换为 7 种主流 AI 编程平台的格式，包括 `.md` 前缀的 frontmatter、工具白名单、权限模式等差异，全部自动适配。
+forge-loop 让你**一次编写模板，到处部署**——将统一的 agent/command 定义自动转换为 7 种主流 AI 编程平台的格式，包括 `.md` 前缀的 frontmatter、工具白名单、权限模式等差异，全部自动适配。
 
 ## 30 秒上手
 
@@ -10,25 +10,25 @@ loop-forge 让你**一次编写模板，到处部署**——将统一的 agent/c
 
 ```bash
 # 1. 装上（无需全局安装，npx 即可）
-npx loop-forge --list           # 确认能跑通，看到 7 个平台
+npx forge-loop --list           # 确认能跑通，看到 7 个平台
 
 # 2. 在你的项目根目录生成配置（默认无 domain 模式）
-npx loop-forge --all            # 生成 .claude/ .opencode/ .codebuddy/ .trae/ 等
+npx forge-loop --all            # 生成 .claude/ .opencode/ .codebuddy/ .trae/ 等
 
 # 3. 验证一致性
-npx loop-forge --validate --all # 输出"✅ 全部一致"即成功
+npx forge-loop --validate --all # 输出"✅ 全部一致"即成功
 ```
 
 成功标志：
 - 看到 `agents/3 commands/1` 之类的输出
 - 项目根目录出现 `.claude/` `.opencode/` 等目录
-- `loop-forge --validate --all` 退出码 0
+- `forge-loop --validate --all` 退出码 0
 
 之后可以选 `ralph` 领域（带任务列表 + 背压熔断）或 `programming/testing/writing`（基于 ralph 的领域特化）：
 
 ```bash
-npx loop-forge --opencode --domain ralph --dry-run   # 先看会生成什么
-npx loop-forge --opencode --domain ralph             # 真正写入
+npx forge-loop --opencode --domain ralph --dry-run   # 先看会生成什么
+npx forge-loop --opencode --domain ralph             # 真正写入
 ```
 
 跨平台：Windows / macOS / Linux 均可（零运行时依赖，只需 Node.js >= 18）。
@@ -44,20 +44,20 @@ npx loop-forge --opencode --domain ralph             # 真正写入
 | Trae IDE | `name` + `description` + `tools` | 大写 | 无 |
 | CodeBuddy | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase | plan/acceptEdits |
 
-手动维护 7 份配置不仅重复劳动，还容易遗漏。loop-forge 通过 **模板 + 领域 + 渲染器** 三层抽象，彻底解决这个问题。
+手动维护 7 份配置不仅重复劳动，还容易遗漏。forge-loop 通过 **模板 + 领域 + 渲染器** 三层抽象，彻底解决这个问题。
 
 ## 快速开始
 
 ### 安装
 
 ```bash
-npm install -g loop-forge
+npm install -g forge-loop
 ```
 
 或直接使用：
 
 ```bash
-npx loop-forge --help
+npx forge-loop --help
 ```
 
 > 需要 Node.js >= 18。零运行时依赖，仅依赖 TypeScript 编译输出。
@@ -66,16 +66,16 @@ npx loop-forge --help
 
 ```bash
 # 生成所有平台
-loop-forge --all
+forge-loop --all
 
 # 生成指定平台
-loop-forge --claude --opencode --trae
+forge-loop --claude --opencode --trae
 
 # 交互式选择平台（TTY 环境）
-loop-forge
+forge-loop
 
 # 列出支持的平台
-loop-forge --list
+forge-loop --list
 ```
 
 ### 领域化生成
@@ -84,16 +84,16 @@ loop-forge --list
 
 ```bash
 # 使用编程领域
-loop-forge --opencode --domain programming
+forge-loop --opencode --domain programming
 
 # 使用测试领域
-loop-forge --claude --domain testing
+forge-loop --claude --domain testing
 
 # 使用写作领域
-loop-forge --claude --domain writing
+forge-loop --claude --domain writing
 
 # 使用 ralph 领域（带 backpressure 断路器）
-loop-forge --claude --domain ralph
+forge-loop --claude --domain ralph
 ```
 
 内置领域一览：
@@ -105,7 +105,7 @@ loop-forge --claude --domain ralph
 | `testing` | test-orchestrator / test-writer / coverage-reviewer | test-loop | `npm test` / max=3 / 重试 | 基于 ralph 内核的测试领域特化 |
 | `writing` | writing-orchestrator / writing-author / writing-reviewer | writing-loop | `npm run lint` / max=2 / 不重试 | 基于 ralph 内核的写作领域特化（弱门禁） |
 
-> **架构定位**：`ralph` 是 loop-forge 的内核范式——**任务列表（TaskList）驱动 + 背压熔断（backpressure circuit breaker）**。
+> **架构定位**：`ralph` 是 forge-loop 的内核范式——**任务列表（TaskList）驱动 + 背压熔断（backpressure circuit breaker）**。
 > 它有专属模板（`src/templates/agents/ralph-*.md`），与 programming/testing 的 scope/baseline 范式在结构上明显区分。
 > `backpressure`（断路器）是通用内核能力，所有内置领域默认携带；`programming` / `testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
 
@@ -167,7 +167,7 @@ loop-forge --claude --domain ralph
 通过 `--domain-file` 传入：
 
 ```bash
-loop-forge --opencode --domain-file ./my-domain.json
+forge-loop --opencode --domain-file ./my-domain.json
 ```
 
 ### 演练模式
@@ -175,7 +175,7 @@ loop-forge --opencode --domain-file ./my-domain.json
 不实际写入文件，仅打印将要生成的内容：
 
 ```bash
-loop-forge --all --dry-run
+forge-loop --all --dry-run
 ```
 
 ### 验证模式
@@ -184,13 +184,13 @@ loop-forge --all --dry-run
 
 ```bash
 # 验证单个平台
-loop-forge --validate --claude
+forge-loop --validate --claude
 
 # 验证所有平台
-loop-forge --validate --all
+forge-loop --validate --all
 
 # 验证指定领域
-loop-forge --validate --claude -d programming
+forge-loop --validate --claude -d programming
 
 # 退出码：0 = 一致，1 = 发现问题
 ```
@@ -209,13 +209,13 @@ loop-forge --validate --claude -d programming
 
 ```bash
 # 监听单个平台
-loop-forge --watch --claude
+forge-loop --watch --claude
 
 # 监听所有平台
-loop-forge --watch --all
+forge-loop --watch --all
 
 # 监听 + 指定领域
-loop-forge --watch --claude -d writing
+forge-loop --watch --claude -d writing
 
 # 按 Ctrl+C 退出
 ```
@@ -226,10 +226,10 @@ loop-forge --watch --claude -d writing
 
 ```bash
 # 增量生成所有平台
-loop-forge --incremental --all
+forge-loop --incremental --all
 
 # 增量生成 + 指定领域
-loop-forge --incremental --claude -d programming
+forge-loop --incremental --claude -d programming
 ```
 
 首次运行等同于全量生成。之后若模板或领域未变，输出 `+0 更新`：
@@ -245,16 +245,16 @@ loop-forge --incremental --claude -d programming
 
 ```bash
 # 导出所有平台
-loop-forge --archive configs.zip --all
+forge-loop --archive configs.zip --all
 
 # 导出指定平台
-loop-forge --archive claude-only.zip --claude
+forge-loop --archive claude-only.zip --claude
 
 # 导出 + 指定领域
-loop-forge --archive writing-config.zip --all -d writing
+forge-loop --archive writing-config.zip --all -d writing
 
 # 自动补 .zip 扩展名
-loop-forge --archive configs --all
+forge-loop --archive configs --all
 ```
 
 
@@ -279,14 +279,14 @@ your-project/
 ├── .claude/                        # 成员本机生成（不提交，gitignore）
 ├── .opencode/agents/               # 同上
 ├── .codebuddy/
-├── .loop-forge/cache/              # incremental manifest 缓存（不提交，gitignore）
+├── .forge-loop/cache/              # incremental manifest 缓存（不提交，gitignore）
 └── ...
 ```
 
 `.gitignore` 推荐：
 
 ```gitignore
-# loop-forge 生成的平台目录（成员本机按需生成）
+# forge-loop 生成的平台目录（成员本机按需生成）
 .claude/
 .codebuddy/
 .kilo/
@@ -300,8 +300,8 @@ your-project/
 !.opencode/templates/
 !.opencode/domains/
 
-# loop-forge incremental manifest 缓存（成员本机，不共享）
-.loop-forge/cache/
+# forge-loop incremental manifest 缓存（成员本机，不共享）
+.forge-loop/cache/
 ```
 
 ### 标准循环
@@ -309,13 +309,13 @@ your-project/
 ```
 1. 领域作者修改 .opencode/domains/*.json（领域定义）或 .opencode/templates/**（模板）
               ↓
-2. 本地验证：loop-forge --validate --all
+2. 本地验证：forge-loop --validate --all
               ↓
 3. 提交 PR（含 .opencode/domains/ 和 .opencode/templates/）
               ↓
-4. CI 自动跑 loop-forge --validate（见下一节"CI 集成"）
+4. CI 自动跑 forge-loop --validate（见下一节"CI 集成"）
               ↓
-5. 合并后，队友拉取代码 → 本机跑 loop-forge --all → 拿到最新 agent 配置
+5. 合并后，队友拉取代码 → 本机跑 forge-loop --all → 拿到最新 agent 配置
 ```
 
 ### 团队共享领域的最小例子
@@ -349,14 +349,14 @@ your-project/
 队友拉取后即可使用——`.opencode/domains/` 里的文件会被自动扫描，`--domain <id>` 直接可用：
 
 ```bash
-loop-forge --claude --opencode --domain security-audit
+forge-loop --claude --opencode --domain security-audit
 ```
 
 > 领域文件放在 `.opencode/domains/` 下会自动发现。如果领域文件在别处，也可以用 `--domain-file <path>` 显式指定。
 
 ## CI 集成
 
-在 GitHub Actions 上自动跑 `loop-forge --validate`，检测 agent 配置漂移。失败时阻塞 PR 合并。
+在 GitHub Actions 上自动跑 `forge-loop --validate`，检测 agent 配置漂移。失败时阻塞 PR 合并。
 
 `.github/workflows/agent-config.yml`：
 
@@ -380,14 +380,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install loop-forge
-        run: npm install -g loop-forge
+      - name: Install forge-loop
+        run: npm install -g forge-loop
 
       - name: Generate platform configs
-        run: loop-forge --all
+        run: forge-loop --all
 
       - name: Validate consistency
-        run: loop-forge --validate --all
+        run: forge-loop --validate --all
 ```
 
 效果：任何修改了 `.opencode/domains/` 领域定义或 `.opencode/templates/` 模板的 PR，CI 都会跑一遍生成 + 验证。生成的 `.claude/` `.opencode/` 等文件**不需要提交**——CI 只验证"模板改完还能跑出预期配置"，团队成员本机生成即可。
@@ -397,12 +397,12 @@ jobs:
 ## 常见问题
 
 <details>
-<summary><b>Q1: 队友拉下来跑 `loop-forge --all`，但生成的文件和我不一样？</b></summary>
+<summary><b>Q1: 队友拉下来跑 `forge-loop --all`，但生成的文件和我不一样？</b></summary>
 
 先用 `--validate` 查差异：
 
 ```bash
-loop-forge --validate --all
+forge-loop --validate --all
 ```
 
 输出三类问题：
@@ -427,7 +427,7 @@ ls .opencode/templates/agents/
 # 领域专属：<domain-id>-<role>.md（如 ralph-orchestrator.md）
 ```
 
-`loop-forge` 在用户模板目录找不到时**静默回退**到内置模板（这是有意设计，避免报错打断工作流）。如果想确认是否加载了用户模板，把 `--dry-run` 输出和默认输出对比。
+`forge-loop` 在用户模板目录找不到时**静默回退**到内置模板（这是有意设计，避免报错打断工作流）。如果想确认是否加载了用户模板，把 `--dry-run` 输出和默认输出对比。
 
 </details>
 
@@ -437,7 +437,7 @@ ls .opencode/templates/agents/
 检查 flag 拼写：
 
 ```bash
-loop-forge --list    # 列出所有支持的平台
+forge-loop --list    # 列出所有支持的平台
 ```
 
 常见拼写错误：`--opencod`（少 e）、`--claudecode`（连写）、`--claude-code`（带连字符）。所有平台都是单 flag：`--claude --opencode --codebuddy --trae --omp --qoder --kilo`。
@@ -497,7 +497,7 @@ loop-forge --list    # 列出所有支持的平台
 
 ## 自定义模板
 
-loop-forge 会从两个位置加载模板：
+forge-loop 会从两个位置加载模板：
 
 1. **包内置模板** — `src/templates/agents/` 和 `src/templates/commands/`
 2. **用户自定义模板** — 项目根目录下的 `.opencode/templates/agents/` 和 `.opencode/templates/commands/`
@@ -540,7 +540,7 @@ permission:
 
 ## 权限模型
 
-loop-forge 为不同角色预定义了工具白名单和权限模式：
+forge-loop 为不同角色预定义了工具白名单和权限模式：
 
 ### 角色 → 工具映射
 

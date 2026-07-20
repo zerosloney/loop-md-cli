@@ -16,7 +16,7 @@ describe("validatePlatform", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd();
-    tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-validate-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-validate-test-"));
     process.chdir(tmpDir);
   });
 

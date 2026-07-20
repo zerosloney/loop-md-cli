@@ -305,7 +305,7 @@ describe("domain-schema validation", () => {
   // ─── readDomainFile ───
 
   it("throws on invalid JSON", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const badFile = join(tmpDir, "bad.json");
       writeFileSync(badFile, "{ not valid json }");
@@ -320,7 +320,7 @@ describe("domain-schema validation", () => {
   });
 
   it("throws on schema validation failure", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const badFile = join(tmpDir, "bad.json");
       writeFileSync(badFile, JSON.stringify({ id: "", agents: [], commands: [], engine: { type: "loop" } }));
@@ -331,7 +331,7 @@ describe("domain-schema validation", () => {
   });
 
   it("throws on missing orchestrator", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const file = join(tmpDir, "no-orchestrator.json");
       writeFileSync(file, JSON.stringify({
@@ -347,7 +347,7 @@ describe("domain-schema validation", () => {
   });
 
   it("throws on missing entry command", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const file = join(tmpDir, "no-entry.json");
       writeFileSync(file, JSON.stringify({
@@ -363,7 +363,7 @@ describe("domain-schema validation", () => {
   });
 
   it("returns ResolvedDomain on valid file", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const file = join(tmpDir, "valid.json");
       writeFileSync(file, JSON.stringify({
@@ -393,7 +393,7 @@ describe("domain-schema validation", () => {
   });
 
   it("throws on duplicate agent names", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "loop-forge-schema-test-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "forge-loop-schema-test-"));
     try {
       const file = join(tmpDir, "dup.json");
       writeFileSync(file, JSON.stringify({
