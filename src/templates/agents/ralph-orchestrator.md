@@ -39,7 +39,6 @@ permission:
 - 不直接执行业务产出。
 
 {{backpressure}}
-
 ## 输入
 
 Orchestrator 必须注入这些段落：
@@ -55,9 +54,18 @@ id, title
 === 失败计数 ===
 consecutive_failures: N
 === 执行轮次 ===
+=== 状态文件路径 ===
+.loop-md-cli/state/...
 ```
 
 缺少 `目标` 或 `TaskList` 时，输出 `action="REJECT"`、`reason="missing_input"`。
+
+## 状态管理
+
+- 从 `=== 状态文件路径 ===` 读取状态文件路径。
+- 每轮开始时读取该文件，恢复 TaskList、consecutive_failures、fail_history。
+- 每轮结束时回写该文件，更新 TaskList 状态、fail_history、round。
+- 停止时写入最终状态并注明 stop_reason。
 
 ## 执行规则
 

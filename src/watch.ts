@@ -1,10 +1,11 @@
 /**
  * watch 模式：监听模板和领域文件变化，自动重新生成。
  *
- * 使用 Node.js 原生 fs.watchFile（兼容所有平台，包括 Windows）。
- * 防抖策略：同一文件 300ms 内的多次修改只触发一次生成。
+ * 用 fs.watch 监听模板目录（agents/、commands/），新增 .md 文件也能触发；
+ * 自定义领域文件保持 fs.watchFile（用户指定单文件，无需目录级监听）。
+ * 防抖策略：同一事件 300ms 内的多次触发只调用一次生成。
  */
-import { watchFile, unwatchFile, existsSync, readdirSync } from "node:fs";
+import { watch, watchFile, unwatchFile, existsSync, type FSWatcher } from "node:fs";
 import { join } from "node:path";
 
 import { generatePlatform } from "./generate.js";
@@ -44,7 +45,6 @@ class Debouncer {
     this.pending = false;
   }
 }
-
 /**
  * 启动 watch 模式，返回清理函数。
  * @param platforms 要监控的平台列表
@@ -64,31 +64,31 @@ export function startWatch(
     runGeneration(platforms, domain, domainFiles, cwd, incremental);
   }, 300);
 
-  const watchedFiles: string[] = [];
+  const watchers: FSWatcher[] = [];
 
-  // 监听模板目录
+  // 监听模板目录（fs.watch 目录级，新增 .md 文件也能触发）
   const templatesBase = join(cwd, DEFAULT_TEMPLATES_ROOT);
   const watchTemplateDir = (subdir: string) => {
     const dir = join(templatesBase, subdir);
     if (!existsSync(dir)) return;
-    const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
-    for (const file of files) {
-      const fullPath = join(dir, file);
-      watchFile(fullPath, () => {
-        debouncer.trigger();
+    try {
+      const w = watch(dir, (eventType, filename) => {
+        // filename 可能为 null（某些平台/场景），此时保守触发
+        if (!filename || filename.endsWith(".md")) {
+          debouncer.trigger();
+        }
       });
-      watchedFiles.push(fullPath);
+      watchers.push(w);
+    } catch {
+      // 目录不可监听时静默降级——不会漏文件，只是不会自动刷新
     }
   };
   watchTemplateDir("agents");
   watchTemplateDir("commands");
 
-  // 监听自定义领域文件
+  // 监听自定义领域文件（单文件，watchFile 更可靠）
   for (const file of domainFiles) {
-    watchFile(file, () => {
-      debouncer.trigger();
-    });
-    watchedFiles.push(file);
+    watchFile(file, () => { debouncer.trigger(); });
   }
 
   // 初始生成
@@ -103,16 +103,14 @@ export function startWatch(
   // 返回清理函数
   return () => {
     debouncer.dispose();
-    for (const file of watchedFiles) {
-      try {
-        unwatchFile(file);
-      } catch {
-        // ignore
-      }
+    for (const w of watchers) {
+      try { w.close(); } catch { /* ignore */ }
+    }
+    for (const file of domainFiles) {
+      try { unwatchFile(file); } catch { /* ignore */ }
     }
   };
 }
-
 function runGeneration(
   platforms: string[],
   domain: string | undefined,

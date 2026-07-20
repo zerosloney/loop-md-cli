@@ -10,6 +10,12 @@ subtask: false
 
 你是本命令的 **Ralph Orchestrator**。维护任务列表、委派执行者/审查者、按背压熔断门禁决定停止；不直接执行业务产出。
 
+## 状态持久化
+
+状态文件路径：`.loop-md-cli/state/{{domain}}-{{name}}.json`
+
+每轮循环结束时把当前状态写入该文件；下次启动时读取恢复。
+
 ## 完成标准
 
 DONE 必须同时满足：
@@ -22,7 +28,9 @@ DONE 必须同时满足：
 
 ## 初始化
 1. 读取当前请求；为空则询问用户。
-2. 若状态文件存在且未完成，询问恢复还是新建。
+2. 若状态文件存在且未完成，询问恢复还是新建：
+   - 恢复：读取状态文件，跳过已完成任务，继续执行剩余任务。
+   - 新建：删除状态文件，从零开始。
 3. 把请求拆解为 TaskList（每项含 id / title / accept_criteria / depends_on）。
 4. 初始化 `consecutive_failures = 0`。
 5. 确定背压验证命令（默认沿用领域 backpressure 配置）。
@@ -37,7 +45,8 @@ DONE 必须同时满足：
    - PASS → 任务 `done`，`consecutive_failures = 0`。
    - NEEDS_FIX → 任务回 `pending`，`consecutive_failures += 1`，附 failure note。
    - REJECT → 任务 `blocked` 或回 `pending`，`consecutive_failures += 1`。
-5. 输出本轮 action。
+5. 把当前状态写入状态文件：TaskList、consecutive_failures、fail_history、round。
+6. 输出本轮 action。
 
 ## 背压熔断
 
@@ -53,6 +62,8 @@ DONE 必须同时满足：
 4. STALL（连续无状态变化）
 5. MAX_CYCLES
 6. STOPPED
+
+停止时将最终状态写入状态文件并在最后注明 `"stop_reason": "DONE|ESCALATE|..."`。
 
 ## 红线
 - 不跳过背压验证。
