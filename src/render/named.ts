@@ -1,8 +1,11 @@
 /**
  * named 族（claude / omp / qoder）：
  *   name + description + tools（白名单，来自 ROLE_TOOLS；留空 = 继承全部，不写 tools 字段）
+ *
+ * tools 按 **role** 索引（reviewer = 只读；orchestrator/executor = 继承全部），
+ * src.role 缺失时回退到 findAgentRole(src.name) 保向后兼容。
  */
-import { ROLE_TOOLS } from "../roles.js";
+import { ROLE_TOOLS, findAgentRole } from "../roles.js";
 import type { Platform } from "../platforms.js";
 import type { AgentSource, CommandSource } from "./types.js";
 import type { Renderer } from "./types.js";
@@ -11,7 +14,8 @@ import { assemble } from "./types.js";
 export class NamedRenderer implements Renderer {
   renderAgent(src: AgentSource, _platform: Platform): string {
     const lines = [`name: ${src.name}`, `description: ${src.description}`];
-    const tools = ROLE_TOOLS[src.name] ?? "";
+    const role = src.role ?? findAgentRole(src.name);
+    const tools = ROLE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);
     return assemble(lines, src.body);
   }

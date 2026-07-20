@@ -86,10 +86,10 @@ describe("generatePlatform integration", () => {
     assert.equal(result.agents, 3, "expected 3 agents");
     assert.equal(result.commands, 1, "expected 1 command");
 
-    // Without domain, agent name is "executor" → permissionMode falls back to "default"
+    // Without domain, agent name is "executor" → role=executor → permissionMode: acceptEdits
     const executorContent = readFile(".codebuddy/agents/executor.md");
     assert.ok(executorContent.includes("model: inherit"), "should have model: inherit");
-    assert.ok(executorContent.includes("permissionMode: default"), "executor should have permissionMode: default");
+    assert.ok(executorContent.includes("permissionMode: acceptEdits"), "executor should have permissionMode: acceptEdits");
 
     // With domain "programming", executor name becomes "code-builder" → permissionMode: acceptEdits
     generatePlatform("codebuddy", false, ".opencode/templates", "programming");
@@ -469,6 +469,79 @@ describe("generatePlatform integration", () => {
     assert.ok(
       content.includes("agent: orchestrator"),
       "default command should bind to orchestrator via defaultDomain",
+    );
+  });
+
+  // ─── 缺陷 1 回归：reviewer 角色（任意领域名）必须拿到只读工具白名单 ───
+  // 旧实现按 agent name 索引，导致 writing-reviewer / ralph-reviewer / 无 domain 的 reviewer
+  // 在 named/codebuddy/trae 族下没有任何工具限制，违反 README 明文承诺的"只读审查"。
+
+  it("default (no domain) reviewer gets read-only tools (named family)", () => {
+    generatePlatform("claude", false, ".opencode/templates");
+
+    const content = readFile(".claude/agents/reviewer.md");
+    assert.ok(
+      content.includes("tools: Read, Grep, Glob, Bash"),
+      "no-domain reviewer should still be read-only (was unguarded before defect-1 fix)",
+    );
+  });
+
+  it("writing domain reviewer gets read-only tools (named family)", () => {
+    generatePlatform("claude", false, ".opencode/templates", "writing");
+
+    const content = readFile(".claude/agents/writing-reviewer.md");
+    assert.ok(
+      content.includes("tools: Read, Grep, Glob, Bash"),
+      "writing-reviewer must have read-only tools (was unguarded before defect-1 fix)",
+    );
+  });
+
+  it("ralph domain reviewer gets read-only tools on trae (uppercase, no Bash)", () => {
+    generatePlatform("trae", false, ".opencode/templates", "ralph");
+
+    const content = readFile(".trae/agents/ralph-reviewer.md");
+    assert.ok(
+      content.includes("tools: Read, Glob, Grep"),
+      "ralph-reviewer on trae should get uppercase read-only tools",
+    );
+    assert.ok(!content.includes("Bash"), "ralph-reviewer on trae must NOT have Bash");
+  });
+
+  it("writing domain reviewer gets plan permissionMode on codebuddy", () => {
+    generatePlatform("codebuddy", false, ".opencode/templates", "writing");
+
+    const content = readFile(".codebuddy/agents/writing-reviewer.md");
+    assert.ok(
+      content.includes("permissionMode: plan"),
+      "writing-reviewer on codebuddy must get plan mode (was default before defect-1 fix)",
+    );
+    assert.ok(
+      content.includes("tools: Read, Grep, Glob, Bash"),
+      "writing-reviewer on codebuddy must have read-only tools",
+    );
+  });
+
+  // ─── 缺陷 3 回归：incremental 切换领域时必须清理孤儿文件 ───
+  // 旧实现 incremental 完全不扫描 manifest 里的孤儿，导致 ralph → default 切换后
+  // ralph-*.md 永久残留。修复后 incremental 应当 prune manifest 记录过、但本次 expected 没有的文件。
+
+  it("incremental mode prunes orphan files when switching domains", () => {
+    // 第一轮：用 ralph 领域 incremental 生成
+    generatePlatform("claude", false, ".opencode/templates", "ralph", [], true);
+    const afterRalph = listFiles(join(process.cwd(), ".claude/agents"));
+    assert.deepEqual(
+      afterRalph,
+      ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"],
+      "ralph domain should produce 3 ralph-* agents",
+    );
+
+    // 第二轮：切到默认领域 incremental 生成
+    generatePlatform("claude", false, ".opencode/templates", undefined, [], true);
+    const afterDefault = listFiles(join(process.cwd(), ".claude/agents"));
+    assert.deepEqual(
+      afterDefault,
+      ["executor.md", "orchestrator.md", "reviewer.md"],
+      "switching back to default must prune ralph-* orphans (was retained before defect-3 fix)",
     );
   });
 });

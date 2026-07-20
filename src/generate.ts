@@ -16,6 +16,7 @@ import { AGENTS, COMMANDS, AGENT_ROLES, ENGINE_TYPES } from "./registry.js";
 import { loadAgentTemplates, loadCommandTemplates, loadTemplateFiles, renderTemplate } from "./template.js";
 import { parseSource } from "./frontmatter.js";
 import { resolveDomains, findDomain } from "./domain-loader.js";
+import { findAgentRole } from "./roles.js";
 import { NamedRenderer } from "./render/named.js";
 import { ModeRenderer } from "./render/mode.js";
 import { CodeBuddyRenderer } from "./render/codebuddy.js";
@@ -138,7 +139,7 @@ export function renderAgent(
 
   const rendered = renderTemplate(tpl, { name: agentName, description, backpressure: backpressureText });
   const { frontmatter, body } = parseSource(rendered);
-  const src: AgentSource = { name: agentName, description, frontmatter, body };
+  const src: AgentSource = { name: agentName, description, frontmatter, body, role };
   const content = renderer.renderAgent(src, platform);
   return { name: agentName, content };
 }
@@ -174,20 +175,6 @@ export function renderCommand(
   const src: CommandSource = { name: commandName, description, frontmatter, body };
   const content = renderer.renderCommand(src, platform);
   return { name: commandName, content };
-}
-
-function findAgentRole(name: string): string {
-  // Exact match
-  if (AGENT_ROLES.includes(name)) return name;
-  // Try suffix match (e.g., "code-executor" → "executor")
-  const parts = name.split("-");
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (AGENT_ROLES.includes(parts[i])) return parts[i];
-  }
-  // Try prefix match (e.g., "test-orchestrator" → "orchestrator")
-  if (parts.length > 1 && AGENT_ROLES.includes(parts[0])) return parts[0];
-  // Fallback
-  return "orchestrator";
 }
 
 /**
@@ -278,7 +265,7 @@ export function generatePlatform(
     const backpressureText = role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
     const rendered = renderTemplate(tpl, { name: key, description, backpressure: backpressureText });
     const { frontmatter, body } = parseSource(rendered);
-    const src: AgentSource = { name: key, description, frontmatter, body };
+    const src: AgentSource = { name: key, description, frontmatter, body, role };
     const out = renderer.renderAgent(src, platform);
     const relativePath = `agents/${key}.md`;
     expectedFiles.set(relativePath, out);

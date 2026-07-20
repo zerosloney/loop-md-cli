@@ -85,10 +85,19 @@ export function exportArchive(
 }
 
 // ── ZIP 构建 ──
+//
+// 按 PKZIP APPNOTE 6.3.x 实现 STORED（method=0）归档，关键字段：
+//   general purpose bit flag bit 11 (0x0800) → 文件名按 UTF-8 编码（多字节文件名必需）
+//   file name length / extra field length    → local header offset 26/28、CD offset 28/30 必填
+//   crc-32                                    → 对未压缩数据计算（标准 PKZIP/polynomial 0xEDB88320）
+//
+// 旧实现的 bug：① 用 e.name.length（字符数）算 buffer size 但用 UTF-8 字节写入 → 非 ASCII 文件名越界崩溃
+//               ② 完全缺 name length / extra length 字段，CRC=0，未设 UTF-8 flag → 结构非法
 
 const LOCAL_SIG = 0x04034b50;
 const CD_SIG = 0x02014b50;
 const EOCDR_SIG = 0x06054b50;
+const GP_UTF8 = 0x0800; // bit 11: 文件名是 UTF-8
 
 function u16(b: Buffer, o: number, v: number) { b.writeUInt16LE(v, o); }
 function u32(b: Buffer, o: number, v: number) { b.writeUInt32LE(v, o); }
@@ -98,86 +107,113 @@ function wstr(b: Buffer, o: number, s: string): number {
   return bytes.length;
 }
 
+// 标准 PKZIP CRC-32 (polynomial 0xEDB88320, reflected)
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf: Buffer): number {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  }
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
 interface FileInfo {
   name: string;
+  nameBytes: number; // UTF-8 字节数（不是字符数）
   size: number;
+  crc: number;
   offset: number;
 }
 
 function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
-  // Phase 1: compute local file entry sizes and offsets
+  // Phase 1: 计算每个 local entry 的 size 和 offset
+  // Local file header = 30 字节固定 + nameBytes + data
   const infos: FileInfo[] = [];
   let localDataSize = 0;
   for (const e of entries) {
-    const entrySize = 28 + e.name.length + e.data.length;
-    infos.push({ name: e.name, size: e.data.length, offset: localDataSize });
+    const nameBytes = Buffer.byteLength(e.name, "utf-8");
+    const crc = crc32(e.data);
+    const entrySize = 30 + nameBytes + e.data.length;
+    infos.push({ name: e.name, nameBytes, size: e.data.length, crc, offset: localDataSize });
     localDataSize += entrySize;
   }
 
-  // Phase 2: compute central directory size
+  // Phase 2: central directory 大小
+  // CD entry = 46 字节固定 + nameBytes
   let cdSize = 0;
   for (const info of infos) {
-    cdSize += 44 + info.name.length;
+    cdSize += 46 + info.nameBytes;
   }
   const eocdrSize = 22;
 
-  // Total buffer size
   const totalSize = localDataSize + cdSize + eocdrSize;
   const buf = Buffer.alloc(totalSize);
   let pos = 0;
 
-  // Phase 3: write local file headers + data
+  // Phase 3: 写 local file header + name + data
   for (let i = 0; i < infos.length; i++) {
     const info = infos[i];
     const e = entries[i];
-    u32(buf, pos, LOCAL_SIG); pos += 4;
-    u16(buf, pos, 20); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u32(buf, pos, 0); pos += 4;
-    u32(buf, pos, info.size); pos += 4;
-    u32(buf, pos, info.size); pos += 4;
-    pos += wstr(buf, pos, info.name);
-    u16(buf, pos, 0); pos += 2;
+    u32(buf, pos, LOCAL_SIG); pos += 4;       // signature
+    u16(buf, pos, 20); pos += 2;               // version needed to extract (2.0)
+    u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
+    u16(buf, pos, 0); pos += 2;                // compression method: stored
+    u16(buf, pos, 0); pos += 2;                // mod time
+    u16(buf, pos, 0); pos += 2;                // mod date
+    u32(buf, pos, info.crc); pos += 4;         // CRC-32
+    u32(buf, pos, info.size); pos += 4;        // compressed size
+    u32(buf, pos, info.size); pos += 4;        // uncompressed size
+    u16(buf, pos, info.nameBytes); pos += 2;   // file name length
+    u16(buf, pos, 0); pos += 2;                // extra field length
+    pos += wstr(buf, pos, info.name);          // file name (UTF-8 bytes)
     e.data.copy(buf, pos);
     pos += info.size;
   }
 
-  // Phase 4: write central directory
+  // Phase 4: 写 central directory
   const cdStart = pos;
-  for (let i = 0; i < infos.length; i++) {
-    const info = infos[i];
-    u32(buf, pos, CD_SIG); pos += 4;
-    u16(buf, pos, 20); pos += 2;
-    u16(buf, pos, 20); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u32(buf, pos, 0); pos += 4;
-    u32(buf, pos, info.size); pos += 4;
-    u32(buf, pos, info.size); pos += 4;
+  for (const info of infos) {
+    u32(buf, pos, CD_SIG); pos += 4;           // signature
+    u16(buf, pos, 20); pos += 2;               // version made by
+    u16(buf, pos, 20); pos += 2;               // version needed
+    u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
+    u16(buf, pos, 0); pos += 2;                // compression method: stored
+    u16(buf, pos, 0); pos += 2;                // mod time
+    u16(buf, pos, 0); pos += 2;                // mod date
+    u32(buf, pos, info.crc); pos += 4;         // CRC-32
+    u32(buf, pos, info.size); pos += 4;        // compressed size
+    u32(buf, pos, info.size); pos += 4;        // uncompressed size
+    u16(buf, pos, info.nameBytes); pos += 2;   // file name length
+    u16(buf, pos, 0); pos += 2;                // extra field length
+    u16(buf, pos, 0); pos += 2;                // file comment length
+    u16(buf, pos, 0); pos += 2;                // disk number start
+    u16(buf, pos, 0); pos += 2;                // internal attributes
+    u32(buf, pos, 0); pos += 4;                // external attributes
+    u32(buf, pos, info.offset); pos += 4;      // local header offset
     pos += wstr(buf, pos, info.name);
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u16(buf, pos, 0); pos += 2;
-    u32(buf, pos, 0); pos += 4;
-    u32(buf, pos, info.offset); pos += 4;
   }
 
-  // Phase 5: write end of central directory record
+  // Phase 5: 写 EOCDR
   const actualCdSize = pos - cdStart;
   u32(buf, pos, EOCDR_SIG); pos += 4;
-  u16(buf, pos, 0); pos += 2;
-  u16(buf, pos, 0); pos += 2;
-  u16(buf, pos, infos.length); pos += 2;
-  u16(buf, pos, infos.length); pos += 2;
-  u32(buf, pos, actualCdSize); pos += 4;
-  u32(buf, pos, cdStart); pos += 4;
-  u16(buf, pos, 0); pos += 2;
+  u16(buf, pos, 0); pos += 2;                  // disk number
+  u16(buf, pos, 0); pos += 2;                  // disk with CD start
+  u16(buf, pos, infos.length); pos += 2;       // entries on this disk
+  u16(buf, pos, infos.length); pos += 2;       // total entries
+  u32(buf, pos, actualCdSize); pos += 4;       // CD size
+  u32(buf, pos, cdStart); pos += 4;            // CD offset
+  u16(buf, pos, 0); pos += 2;                  // comment length
 
   return buf;
 }
