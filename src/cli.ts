@@ -28,6 +28,7 @@ import { generatePlatform } from "./generate.js";
 import { validatePlatform, formatValidateResult } from "./validate.js";
 import { startWatch } from "./watch.js";
 import { exportArchive } from "./export.js";
+import { readDomainFile } from "./domain-schema.js";
 
 // ── Package version ──
 
@@ -52,8 +53,8 @@ function printHelp(): void {
     "",
     "选项:",
     "  --help, -h              显示此帮助信息",
-    "  --version, -v           显示版本号",
-    "  --validate, -V          验证平台配置与模板的一致性",
+    "  --version, -V, -v       显示版本号",
+    "  --validate              验证平台配置与模板的一致性",
     "  --watch, -w             监听模板/领域文件变化，自动重新生成",
     "  --incremental, -i       增量生成（仅更新变化文件）",
     "  --archive, -o <path>    导出为 ZIP 压缩包",
@@ -126,9 +127,9 @@ function parseArgs(argv: string[]): Args {
     const tok = argv[i];
     if (tok === "--help" || tok === "-h") {
       args.help = true;
-    } else if (tok === "--version" || tok === "-v") {
+    } else if (tok === "--version" || tok === "-V" || tok === "-v") {
       args.version = true;
-    } else if (tok === "--validate" || tok === "-V") {
+    } else if (tok === "--validate") {
       args.validate = true;
     } else if (tok === "--watch" || tok === "-w") {
       args.watch = true;
@@ -170,6 +171,27 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
+// ── Domain 解析 ──
+
+/**
+ * 解析最终生效的 domain id。规则：
+ *   1. 显式 --domain 优先
+ *   2. 否则若传了单个 --domain-file，从文件读 id 自动推导（README 宣传的用法）
+ *   3. 多个 --domain-file 且无 --domain：报错（多个文件无法确定单一 id）
+ *   4. 都没有：undefined（由 generate.ts 回退到 ralph）
+ *
+ * 读文件失败时抛错——和后续 generate 阶段一致，不静默吞。
+ */
+function resolveDomainId(explicit?: string, domainFiles: string[] = []): string | undefined {
+  if (explicit) return explicit;
+  if (domainFiles.length === 0) return undefined;
+  if (domainFiles.length > 1) {
+    throw new Error("传了多个 --domain-file 但未指定 --domain。请用 --domain <id> 明确选择。");
+  }
+  const d = readDomainFile(domainFiles[0]);
+  return d.id;
+}
+
 // ── Interactive selection ──
 
 function interactiveSelect(dryRun: boolean): void {
@@ -190,11 +212,22 @@ function interactiveSelect(dryRun: boolean): void {
     const choice = Buffer.concat(chunks).toString("utf-8").trim();
     if (["0", "a", "all", "*"].includes(choice)) return finish(PLATFORM_KEYS);
     const picked: string[] = [];
+    const invalid: string[] = [];
     for (const tok of choice.split(/[,\s]+/).filter(Boolean)) {
       if (/^\d+$/.test(tok)) {
         const idx = parseInt(tok, 10);
-        if (idx >= 1 && idx <= PLATFORM_KEYS.length) picked.push(PLATFORM_KEYS[idx - 1]);
+        if (idx >= 1 && idx <= PLATFORM_KEYS.length) {
+          picked.push(PLATFORM_KEYS[idx - 1]);
+        } else {
+          invalid.push(tok);
+        }
+      } else {
+        invalid.push(tok);
       }
+    }
+    if (invalid.length > 0) {
+      console.error(`无效选择: ${invalid.join(", ")}（请输入 1-${PLATFORM_KEYS.length} 的数字，或 0/a 选全部）。`);
+      process.exit(1);
     }
     if (picked.length === 0) {
       console.error("未选择任何平台,退出。");
@@ -253,7 +286,19 @@ function runValidate(selected: string[], domain?: string, domainFiles: string[] 
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
+  // --domain 未指定时从 --domain-file 自动推导（单文件场景）。
+  // 多文件且无 --domain 时这里抛错，避免后续静默用错领域。
+  let domainId: string | undefined;
+  try {
+    domainId = resolveDomainId(args.domain, args.domainFiles);
+  } catch (err) {
+    console.error(`错误: ${(err as Error).message}`);
+    process.exit(1);
+  }
+  runCommand(args, domainId);
+}
 
+function runCommand(args: Args, domainId: string | undefined): void {
   if (args.help) {
     printHelp();
     return;
@@ -279,13 +324,13 @@ function main(): void {
       console.error("错误: --validate 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const totalIssues = runValidate(selected, args.domain || undefined, args.domainFiles);
+    const totalIssues = runValidate(selected, domainId, args.domainFiles);
     if (totalIssues > 0) {
       console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 loop-md-cli --all 重新生成。`);
       process.exit(1);
     }
     console.log("所有平台配置与模板一致。");
-    process.exit(0);
+    return;
   }
 
   if (args.watch) {
@@ -298,7 +343,7 @@ function main(): void {
       console.error("错误: --watch 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const cleanup = startWatch(selected, args.domain || undefined, args.domainFiles, undefined, args.incremental);
+    const cleanup = startWatch(selected, domainId, args.domainFiles, undefined, args.incremental);
     process.on("SIGINT", () => {
       console.log("\n👋 监听已停止。");
       cleanup();
@@ -317,9 +362,9 @@ function main(): void {
       console.error("错误: --archive 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const result = exportArchive(selected, args.archive, args.domain || undefined, args.domainFiles);
+    const result = exportArchive(selected, args.archive, domainId, args.domainFiles);
     console.log(`📦 已导出 ${result.fileCount} 个文件 (${result.platformCount} 个平台) → ${result.filePath}`);
-    process.exit(0);
+    return;
   }
 
   let selected: string[];
@@ -331,7 +376,7 @@ function main(): void {
     interactiveSelect(args.dryRun);
     return;
   }
-  runGenerate(selected, args.dryRun, args.domain || undefined, args.domainFiles, args.incremental);
+  runGenerate(selected, args.dryRun, domainId, args.domainFiles, args.incremental);
 }
 
 main();

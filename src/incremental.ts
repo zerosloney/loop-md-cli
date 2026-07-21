@@ -1,10 +1,10 @@
 /**
  * 增量生成引擎：通过内容哈希检测文件变更，仅重写已变化的文件，并清理 manifest 记录过的孤儿。
  *
- * Manifest 存储位置：{cwd}/.loop-md-cli/cache/{platform}.json
+ * Manifest 存储位置：{cwd}/.loop-cli/cache/{platform}.json
  *
- * 路径选择：放在 .loop-md-cli/cache/ 子目录，与用户领域文件（.opencode/domains/）物理隔离，
- * 避免团队共享的领域 JSON 与本机 manifest 缓存混放。整个 .loop-md-cli/cache/ 应被 gitignore。
+ * 路径选择：放在 .loop-cli/cache/ 子目录，与用户领域文件（.opencode/domains/）物理隔离，
+ * 避免团队共享的领域 JSON 与本机 manifest 缓存混放。整个 .loop-cli/cache/ 应被 gitignore。
  *
  * 工作流程：
  *   1. 读取 manifest（不存在则视为首次运行）
@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
-const MANIFEST_DIR = ".loop-md-cli/cache";
+const MANIFEST_DIR = ".loop-cli/cache";
 
 // ── 类型 ──
 

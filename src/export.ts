@@ -166,7 +166,17 @@ interface FileInfo {
   offset: number;
 }
 
+// MS-DOS 时间/日期格式（ZIP 标准字段）。
+// 把 Date 转为 16 位 time / 16 位 date；避免解压后文件时间显示 1980-00-00。
+function dosDateTime(d: Date): { time: number; date: number } {
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = (((d.getFullYear() - 1980) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+  return { time, date };
+}
+
 function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
+  // 所有条目共享打包时刻，简化逻辑且对工具行为无影响。
+  const { time: modTime, date: modDate } = dosDateTime(new Date());
   // Phase 1: 计算每个 local entry 的 size 和 offset
   // Local file header = 30 字节固定 + nameBytes + data
   const infos: FileInfo[] = [];
@@ -199,8 +209,8 @@ function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
     u16(buf, pos, 20); pos += 2;               // version needed to extract (2.0)
     u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
     u16(buf, pos, 0); pos += 2;                // compression method: stored
-    u16(buf, pos, 0); pos += 2;                // mod time
-    u16(buf, pos, 0); pos += 2;                // mod date
+    u16(buf, pos, modTime); pos += 2;          // mod time
+    u16(buf, pos, modDate); pos += 2;          // mod date
     u32(buf, pos, info.crc); pos += 4;         // CRC-32
     u32(buf, pos, info.size); pos += 4;        // compressed size
     u32(buf, pos, info.size); pos += 4;        // uncompressed size
@@ -219,8 +229,8 @@ function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
     u16(buf, pos, 20); pos += 2;               // version needed
     u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
     u16(buf, pos, 0); pos += 2;                // compression method: stored
-    u16(buf, pos, 0); pos += 2;                // mod time
-    u16(buf, pos, 0); pos += 2;                // mod date
+    u16(buf, pos, modTime); pos += 2;          // mod time
+    u16(buf, pos, modDate); pos += 2;          // mod date
     u32(buf, pos, info.crc); pos += 4;         // CRC-32
     u32(buf, pos, info.size); pos += 4;        // compressed size
     u32(buf, pos, info.size); pos += 4;        // uncompressed size

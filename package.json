@@ -3,12 +3,28 @@
   "version": "0.1.0",
   "description": "从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Code-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。",
   "license": "MIT",
+  "author": "dc <574635594@qq.com>",
+  "keywords": [
+    "cli",
+    "ai",
+    "agent",
+    "scaffold",
+    "loop",
+    "claude-code",
+    "opencode",
+    "trae",
+    "codebuddy",
+    "ralph"
+  ],
   "type": "module",
   "bin": {
     "loop-md-cli": "./dist/cli.js"
   },
   "files": [
     "dist/",
+    "!dist/__tests__/",
+    "!dist/**/*.test.js",
+    "!dist/**/_helpers.js",
     "src/templates/"
   ],
   "scripts": {

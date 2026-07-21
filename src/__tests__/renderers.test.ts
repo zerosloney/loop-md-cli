@@ -21,12 +21,47 @@ describe("renderers", () => {
     assert.ok(!out.includes("tools:"));
   });
 
-  it("ModeRenderer emits block scalar for multi-line values", () => {
+  it("ModeRenderer emits YAML map for multi-line map values (permission)", () => {
     const r = new ModeRenderer();
     const out = r.renderAgent(src, platform);
-    assert.ok(out.includes("permission: |"));
+    // permission 是结构化 map，不用 block scalar (|)；直接以嵌套 map 输出
+    assert.ok(!out.includes("permission: |"));
+    assert.ok(out.includes("permission:\n"));
     assert.ok(out.includes("  edit: allow"));
     assert.ok(out.includes("  read: allow"));
+  });
+
+  it("ModeRenderer permission output parses as nested YAML map (not string)", () => {
+    // 回归：OpenCode 按 permission.bash["*"] 访问，必须是 dict 而非字符串。
+    // 用真实模板（带 bash 子 map）渲染，朴素 YAML 解析验证嵌套结构。
+    const deepSrc = {
+      name: "ralph-orchestrator",
+      description: "test",
+      frontmatter: {
+        mode: "subagent",
+        permission: 'edit: deny\nbash:\n  "*": deny\n  "test": allow\nread: allow',
+      },
+      body: "body",
+    };
+    const out = new ModeRenderer().renderAgent(deepSrc, platform);
+    // 朴素 YAML 解析：split 出 frontmatter 块，按缩进重建 map
+    const fmBlock = out.split("---\n")[1];
+    const lines = fmBlock.split("\n");
+    // 找到 permission: 这一行，下面所有更深层缩进行都属于它
+    const permIdx = lines.findIndex((l) => l.startsWith("permission:"));
+    assert.ok(permIdx >= 0, "permission field exists");
+    assert.ok(!lines[permIdx].includes("|"), "not block scalar");
+    // permission 的直接子节点（2 空格缩进）应该是 edit / bash / read
+    const children: string[] = [];
+    for (const l of lines.slice(permIdx + 1)) {
+      if (l.trim() === "") continue;
+      if (/^  [A-Za-z]/.test(l) && !/^   /.test(l)) {
+        children.push(l.trim().split(":")[0]);
+      } else if (/^[A-Za-z]/.test(l)) {
+        break; // 离开 permission 块
+      }
+    }
+    assert.deepEqual(children.sort(), ["bash", "edit", "read"]);
   });
 
   it("ModeRenderer keeps scalar fields inline", () => {
@@ -77,7 +112,7 @@ describe("renderers", () => {
     assert.ok(out.includes("permissionMode: plan"), "reviewer role should get plan mode");
   });
 
-  it("TraeRenderer restricts reviewer tools by role (uppercase, no Bash)", () => {
+  it("TraeRenderer restricts reviewer tools by role (lowercase, no Bash)", () => {
     const r = new TraeRenderer();
     const reviewerSrc = {
       ...src,
@@ -85,7 +120,7 @@ describe("renderers", () => {
       role: "reviewer",
     };
     const out = r.renderAgent(reviewerSrc, platform);
-    assert.ok(out.includes("tools: Read, Glob, Grep"), "trae reviewer should get uppercase read-only tools");
+    assert.ok(out.includes("tools: read, grep, glob"), "trae reviewer should get lowercase read-only tools");
     assert.ok(!out.includes("Bash"), "trae reviewer must NOT have Bash (read-only contract)");
   });
 });

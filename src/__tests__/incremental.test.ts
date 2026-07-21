@@ -85,15 +85,15 @@ describe("manifest", () => {
     assert.equal(loaded1["b.md"], undefined, "no cross-cwd leakage");
   });
 
-  // ─── 路径约定：manifest 落在 .loop-md-cli/cache/ 子目录，与用户领域文件隔离 ───
-  it("writes manifest to .loop-md-cli/cache/ subdirectory", () => {
+  // ─── 路径约定：manifest 落在 .loop-cli/cache/ 子目录，与用户领域文件隔离 ───
+  it("writes manifest to .loop-cli/cache/ subdirectory", () => {
     saveManifest("claude", {}, tmpDir);
-    const expected = join(tmpDir, ".loop-md-cli", "cache", "claude.json");
-    assert.ok(existsSync(expected), "manifest should live under .loop-md-cli/cache/");
-    // 同时确认不会污染 .loop-md-cli/ 根（用户领域文件的位置——现在是 .opencode/domains/，
-    // 但 .loop-md-cli/ 根保持干净也是好习惯）
-    const rootManifest = join(tmpDir, ".loop-md-cli", "claude.json");
-    assert.ok(!existsSync(rootManifest), "manifest must NOT live at .loop-md-cli/ root");
+    const expected = join(tmpDir, ".loop-cli", "cache", "claude.json");
+    assert.ok(existsSync(expected), "manifest should live under .loop-cli/cache/");
+    // 同时确认不会污染 .loop-cli/ 根（用户领域文件的位置——现在是 .opencode/domains/，
+    // 但 .loop-cli/ 根保持干净也是好习惯）
+    const rootManifest = join(tmpDir, ".loop-cli", "claude.json");
+    assert.ok(!existsSync(rootManifest), "manifest must NOT live at .loop-cli/ root");
   });
 });
 

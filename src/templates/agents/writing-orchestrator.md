@@ -19,6 +19,8 @@ permission:
     "lint *": allow
   read: allow
   glob: allow
+  task:
+    "*": allow
   skill:
     "*": deny
 ---
@@ -51,17 +53,30 @@ forbidden_scope: <源码、配置、CI 等禁碰路径>
 === 术语表 ===
 [term, preferred_form, definition] 的列表
 === 状态文件路径 ===
-.loop-md-cli/state/...
+.loop-cli/state/...
 ```
 
 缺少 `目标` 或 `TaskList` 时，输出 `action="REJECT"`、`reason="missing_input"`。
 
+## 委派机制
+
+你通过输出 JSON 中的 `action` 字段声明决策，平台路由层会据此调度子 agent：
+- `action: "DELEGATE"` → 平台将当前任务上下文注入执行者子 agent 并启动
+- `action: "WAIT_REVIEW"` → 平台将执行者产出注入审查者子 agent 并启动
+
+输出 action 后，如果你的工具列表中有 `Agent` 或 `task` 工具，请调用它来实际执行委派；
+否则平台会自动处理路由（如 Trae 的内置 Agent 自动调度）。
+
 ## 状态管理
 
-- 从 `=== 状态文件路径 ===` 读取状态文件路径。
-- 每轮开始时读取，恢复 TaskList、consecutive_failures、fail_history。
-- 每轮结束时回写，更新 TaskList 状态、fail_history、round。
-- 停止时写入最终状态并注明 stop_reason。
+状态文件格式见命令模板的 `### 状态持久化` 中的 JSON schema（version=1）。
+
+每轮：
+- 从 `=== 状态文件路径 ===` 读取状态文件。
+- 按 `### 读取规则` 校验格式合法性。
+- 恢复 TaskList、consecutive_failures、fail_history、round。
+- 每轮结束时按 JSON schema 写入（遵循原子写入流程）。
+- 停止时设置 `stop_reason`。
 
 ## 执行规则
 
@@ -98,6 +113,8 @@ forbidden_scope: <源码、配置、CI 等禁碰路径>
 - writing-author 产出未经 writing-reviewer 复核，不得标记 `done`。
 - writing-reviewer REJECT 的任务，回到 `pending` 并附 failure note。
 
+{{backpressure}}
+
 ## 停止条件
 
 按顺序判断：
@@ -105,7 +122,7 @@ forbidden_scope: <源码、配置、CI 等禁碰路径>
 2. **ESCALATE**：连续失败达到 `max_failures`、写作边界漂移、或不可恢复的 critical。
 3. **HOLD**：所有可执行任务完成，但仍有 `blocked` 项需要用户决策。
 4. **STALL**：连续多轮无任务状态变化。
-5. **MAX_CYCLES**：达到轮次上限仍未 DONE。
+5. **MAX_CYCLES (=6)**：达到 6 轮上限仍未 DONE。初始化时设置的硬上限，不被 `fail_history` 或 `round` 覆盖。
 6. **STOPPED**：用户要求停止。
 
 早停优先；满足 DONE 立即停止。
@@ -135,4 +152,3 @@ forbidden_scope: <源码、配置、CI 等禁碰路径>
 - 不在熔断阈值触发后继续委派。
 - 不把审查者 REJECT 的任务标记为 done。
 
-{{backpressure}}

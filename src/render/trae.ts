@@ -1,9 +1,9 @@
 /**
  * trae 族（Trae IDE）：
- *   name + description + tools（大写工具名，来自 TRAE_TOOLS；reviewer 只读不给 Bash）
+ *   name + description + tools（小写 + camelCase，来自 TRAE_TOOLS；reviewer 只读不给 Bash）
  *   model 省略（继承 IDE 中 Agent 当前模型）
  *
- * tools 按 **role** 索引（reviewer = Read/Glob/Grep 无 Bash；orchestrator/executor = 继承全部），
+ * tools 按 **role** 索引（reviewer = read/grep/glob 无 Bash；orchestrator/executor = 继承全部），
  * src.role 缺失时回退到 findAgentRole(src.name)。
  */
 import { TRAE_TOOLS, findAgentRole } from "../roles.js";

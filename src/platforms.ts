@@ -8,7 +8,7 @@
  *             "named"    → name + description + tools(白名单), claude/omp/qoder
  *             "mode"     → description + mode + temperature/steps + permission(细粒度), opencode/kilo
  *             "codebuddy"→ name + description + model:inherit + tools + permissionMode
- *             "trae"     → name + description + tools(大写工具名)
+ *             "trae"     → name + description + tools(小写 + camelCase)
  *   note    人类可读说明（--list 显示）
  */
 
@@ -25,13 +25,13 @@ export const PLATFORMS: Record<string, Platform> = {
   // ── named 族：name + description + tools ──
   claude: { id: "claude", dir: ".claude", family: "named", note: "Claude Code" },
   omp: { id: "omp", dir: ".omp", family: "named", note: "Oh My Pi" },
-  qoder: { id: "qoder", dir: ".qoder", family: "named", note: "Qoder" },
-  // ── trae 族：name + description + tools(大写工具名) ──
+  qoder: { id: "qoder", dir: ".qoder", family: "named", note: "Qoder CLI(子 agent 用 Agent 工具调度，tools 大写 PascalCase)" },
+  // ── trae 族：name + description + tools(小写 + camelCase) ──
   trae: {
     id: "trae",
     dir: ".trae",
     family: "trae",
-    note: "Trae IDE(项目级 .trae/agents，frontmatter: name/description/model/tools/disallowedTools)",
+    note: "Trae IDE(项目级 .trae/agents，frontmatter: name/description/tools；model 继承 IDE 当前 Agent)",
   },
   // ── mode 族：description + mode + permission(细粒度，从源提取) ──
   opencode: { id: "opencode", dir: ".opencode", family: "mode", note: "OpenCode" },

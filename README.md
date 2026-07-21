@@ -37,12 +37,15 @@ npx loop-md-cli --opencode --domain ralph --dry-run         # 通用内核：Tas
 
 不同的 AI 编程平台（Claude Code、OpenCode、Trae、CodeBuddy ……）对 agent 和 command 的配置格式各不相同：
 
-| 平台 | frontmatter 字段 | 工具名格式 | 权限模型 |
-|------|-----------------|-----------|---------|
-| Claude Code | `name` + `description` + `tools` | PascalCase | 无 |
-| OpenCode | `description` + `mode` + `temperature` + `steps` + `permission` | snake_case | 细粒度 |
-| Trae IDE | `name` + `description` + `tools` | 大写 | 无 |
-| CodeBuddy | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase | plan/acceptEdits |
+| 平台 | 输出目录 | 渲染族 | frontmatter 字段 | 工具名格式 | 权限模型 |
+|------|---------|--------|-----------------|-----------|---------|
+| Claude Code | `.claude/` | named | `name` + `description` + `tools` | PascalCase | 无（按 role 白名单） |
+| Oh My Pi | `.omp/` | named | 同 Claude | PascalCase | 同 Claude |
+| Qoder | `.qoder/` | named | 同 Claude | PascalCase | 同 Claude |
+| OpenCode | `.opencode/` | mode | `description` + `mode` + `temperature` + `steps` + `permission`(嵌套 map) | snake_case | 细粒度（按 role 透传） |
+| Kilo Code | `.kilo/` | mode | 同 OpenCode | snake_case | 同 OpenCode |
+| Trae IDE | `.trae/` | trae | `name` + `description` + `tools`（model 继承 IDE） | 小写 + camelCase | 无（按 role 白名单） |
+| CodeBuddy | `.codebuddy/` | codebuddy | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase | plan / acceptEdits / default |
 
 手动维护 7 份配置不仅重复劳动，还容易遗漏。loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象，彻底解决这个问题。
 
@@ -249,14 +252,14 @@ your-project/
 ├── .claude/                        # 成员本机生成（不提交，gitignore）
 ├── .opencode/agents/               # 同上
 ├── .codebuddy/
-├── .loop-md-cli/cache/              # incremental manifest 缓存（不提交，gitignore）
+├── .loop-cli/cache/              # incremental manifest 缓存（不提交，gitignore）
 └── ...
 ```
 
 `.gitignore` 推荐：
 
 ```gitignore
-# loop-md-cli 生成的平台目录（成员本机按需生成）
+# loop-cli 生成的平台目录（成员本机按需生成）
 .claude/
 .codebuddy/
 .kilo/
@@ -270,8 +273,8 @@ your-project/
 !.opencode/templates/
 !.opencode/domains/
 
-# loop-md-cli incremental manifest 缓存（成员本机，不共享）
-.loop-md-cli/cache/
+# loop-cli incremental manifest 缓存（成员本机，不共享）
+.loop-cli/cache/
 ```
 
 ### 标准循环
@@ -466,7 +469,7 @@ loop-md-cli --list    # 列出所有支持的平台
 | `named` | claude, omp, qoder | `name` + `description` + `tools`（白名单） |
 | `mode` | opencode, kilo | `description` + `mode` + `temperature` + `steps` + `permission` |
 | `codebuddy` | codebuddy | `name` + `description` + `model:inherit` + `tools` + `permissionMode` |
-| `trae` | trae | `name` + `description` + `tools`（大写工具名） |
+| `trae` | trae | `name` + `description` + `tools`（小写 + camelCase 工具名） |
 
 ## 自定义模板
 
@@ -615,8 +618,8 @@ export class MyEditorRenderer implements Renderer {
 | 选项 | 简写 | 说明 |
 |------|------|------|
 | `--help` | `-h` | 显示帮助信息 |
-| `--version` | `-v` | 显示版本号 |
-| `--validate` | `-V` | 验证平台配置与模板一致性 |
+| `--version` | `-V` / `-v` | 显示版本号 |
+| `--validate` | — | 验证平台配置与模板一致性 |
 | `--watch` | `-w` | 监听文件变化，自动重新生成 |
 | `--incremental` | `-i` | 增量生成（仅更新变化文件） |
 | `--archive` | `-o` | 导出为 ZIP 压缩包 |

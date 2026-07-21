@@ -87,8 +87,9 @@ export function startWatch(
   watchTemplateDir("commands");
 
   // 监听自定义领域文件（单文件，watchFile 更可靠）
+  // interval=1000：默认 5s 对领域文件延迟偏大，1s 足够灵敏且几乎零成本。
   for (const file of domainFiles) {
-    watchFile(file, () => { debouncer.trigger(); });
+    watchFile(file, { interval: 1000 }, () => { debouncer.trigger(); });
   }
 
   // 初始生成

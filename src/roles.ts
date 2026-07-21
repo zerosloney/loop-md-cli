@@ -27,10 +27,10 @@ export const ROLE_PERMISSION_MODE: Record<string, string> = {
   orchestrator: "default", // 主控
 };
 
-// trae 族 tools（工具名大写；reviewer 只读不给 Bash，参照官方 security-auditor 范式）
+// trae 族 tools（小写 + camelCase，参照官方文档）
 // 按 role 索引；留空 = 继承全部工具（不写 tools 字段）
 export const TRAE_TOOLS: Record<string, string> = {
-  reviewer: "Read, Glob, Grep", // 只读审查（无 Bash）
+  reviewer: "read, grep, glob", // 只读审查（无 Bash）
   // orchestrator / executor 留空 = 继承全部
 };
 
