@@ -21,6 +21,23 @@ describe("renderers", () => {
     assert.ok(!out.includes("tools:"));
   });
 
+  it("NamedRenderer outputs model when specified", () => {
+    const r = new NamedRenderer();
+    const modelSrc = {
+      ...src,
+      name: "coding-orchestrator",
+      model: "gpt-5.1-codex",
+    };
+    const out = r.renderAgent(modelSrc, platform);
+    assert.ok(out.includes("model: gpt-5.1-codex"), "named renderer should output model");
+  });
+
+  it("NamedRenderer omits model when not specified", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(!out.includes("model:"), "named renderer should not output model when absent");
+  });
+
   it("ModeRenderer emits YAML map for multi-line map values (permission)", () => {
     const r = new ModeRenderer();
     const out = r.renderAgent(src, platform);

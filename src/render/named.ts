@@ -17,6 +17,8 @@ export class NamedRenderer implements Renderer {
     const role = src.role ?? findAgentRole(src.name);
     const tools = ROLE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);
+    // model: 可选，来自 CLI 或领域配置；不指定时省略（继承当前会话模型）
+    if (src.model) lines.push(`model: ${src.model}`);
     return assemble(lines, src.body);
   }
 
