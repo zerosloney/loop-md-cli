@@ -5,7 +5,7 @@
  *   id      平台标识（也是 CLI flag 名，--<id>）
  *   dir     输出目录
  *   family  frontmatter 渲染族：
- *             "named"    → name + description + tools(白名单), claude/omp/qoder
+ *             "named"    → name + description + tools(白名单), claude/qoder
  *             "mode"     → description + mode + temperature/steps + permission(细粒度), opencode/kilo
  *             "codebuddy"→ name + description + model:inherit + tools + permissionMode
  *             "trae"     → name + description + tools(小写 + camelCase)
@@ -24,7 +24,6 @@ export interface Platform {
 export const PLATFORMS: Record<string, Platform> = {
   // ── named 族：name + description + tools ──
   claude: { id: "claude", dir: ".claude", family: "named", note: "Claude Code" },
-  omp: { id: "omp", dir: ".omp", family: "named", note: "Oh My Pi" },
   qoder: { id: "qoder", dir: ".qoder", family: "named", note: "Qoder CLI(子 agent 用 Agent 工具调度，tools 大写 PascalCase)" },
   // ── trae 族：name + description + tools(小写 + camelCase) ──
   trae: {

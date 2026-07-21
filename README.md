@@ -5,7 +5,7 @@
 ## 快速上手
 
 ```bash
-npx @master0071/loop-md-cli --list           # 确认能跑通，看到 7 个平台
+npx @master0071/loop-md-cli --list           # 确认能跑通，看到 6 个平台
 npx @master0071/loop-md-cli --all            # 默认 ralph 范式，生成 .claude/ .opencode/ 等目录
 npx @master0071/loop-md-cli --validate --all # 退出码 0 即所有平台配置与模板一致
 ```
@@ -27,7 +27,7 @@ loop-md-cli --archive configs.zip --all    # 导出 ZIP
 
 ## 为什么需要它？
 
-7 个 AI 编程平台的 agent 配置格式各不相同，手动维护重复劳动且易遗漏：
+6 个 AI 编程平台的 agent 配置格式各不相同，手动维护重复劳动且易遗漏：
 
 | 平台 | 输出目录 | frontmatter 特征 | 工具名格式 |
 |------|---------|-----------------|-----------|
@@ -36,7 +36,6 @@ loop-md-cli --archive configs.zip --all    # 导出 ZIP
 | Kilo Code | `.kilo/` | 同 OpenCode | snake_case |
 | Trae IDE | `.trae/` | `name` + `description` + `tools` | 小写 + camelCase |
 | CodeBuddy | `.codebuddy/` | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase |
-| Oh My Pi | `.omp/` | 同 Claude | PascalCase |
 | Qoder | `.qoder/` | 同 Claude | PascalCase |
 
 loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象解决这个问题。
@@ -127,7 +126,6 @@ permission:
 | 平台 | CLI 标志 | 输出目录 | 渲染族 |
 |------|---------|---------|--------|
 | Claude Code | `--claude` | `.claude/` | named |
-| Oh My Pi | `--omp` | `.omp/` | named |
 | Qoder | `--qoder` | `.qoder/` | named |
 | OpenCode | `--opencode` | `.opencode/` | mode |
 | Kilo Code | `--kilo` | `.kilo/` | mode |

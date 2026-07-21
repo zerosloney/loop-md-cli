@@ -266,17 +266,7 @@ describe("generatePlatform integration", () => {
     }
   });
 
-  // ─── Test: named family (omp, qoder) also works ───
-
-  it("omp platform generates correctly", () => {
-    const result = generatePlatform("omp");
-
-    assert.equal(result.agents, 3);
-    assert.equal(result.commands, 1);
-
-    const agentFiles = listFiles(join(process.cwd(), ".omp/agents"));
-    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
-  });
+  // ─── Test: named family (qoder) also works ───
 
   it("qoder platform generates correctly", () => {
     const result = generatePlatform("qoder");

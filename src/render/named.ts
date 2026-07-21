@@ -1,5 +1,5 @@
 /**
- * named 族（claude / omp / qoder）：
+ * named 族（claude / qoder）：
  *   name + description + tools（白名单，来自 ROLE_TOOLS；留空 = 继承全部，不写 tools 字段）
  *
  * tools 按 **role** 索引（reviewer = 只读；orchestrator/executor = 继承全部），
