@@ -13,7 +13,7 @@ loop-md-cli --list           # 确认能跑通，看到 7 个平台
 
 loop-md-cli --all            # 默认用 ralph 内核范式生成 .claude/ .opencode/ 等
 
-loop-md-cli --validate --all # 输出"✅ 全部一致"即成功
+loop-md-cli --validate --all # 末行输出"所有平台配置与模板一致。"即成功
 ```
 
 成功标志：
@@ -534,6 +534,7 @@ permission:
 | `{{name}}` | 领域定义的 agent/command 名称 | agent |
 | `{{description}}` | 领域定义的描述 | agent + command |
 | `{{agent}}` | 对应 loop 关联的 orchestrator 名称 | command |
+| `{{backpressure}}` | 领域的背压熔断配置（max_failures / retry_on_failure） | orchestrator |
 
 ## 权限模型
 
