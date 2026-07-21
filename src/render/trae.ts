@@ -15,6 +15,7 @@ import { assemble } from "./types.js";
 export class TraeRenderer implements Renderer {
   renderAgent(src: AgentSource, _platform: Platform): string {
     const lines = [`name: ${src.name}`, `description: ${src.description}`];
+    if (src.model) lines.push(`model: ${src.model}`);
     const role = src.role ?? findAgentRole(src.name);
     const tools = TRAE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);

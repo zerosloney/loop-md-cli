@@ -26,7 +26,7 @@ import type { BackpressureConfig, EngineConfig } from "./domain-schema.js";
 export interface Domain {
   id: string;
   engine: EngineConfig;
-  agents: { role: string; name: string; description: string }[];
+  agents: { role: string; name: string; description: string; model?: string }[];
   commands: { kind: string; agent: string; name: string; description: string }[];
   backpressure?: BackpressureConfig;
 }

@@ -12,6 +12,8 @@ export interface AgentSource {
   body: string;
   /** agent 角色（orchestrator / executor / reviewer），用于按 role 索引工具白名单/权限模式。 */
   role?: string;
+  /** Trae 子 agent 模型（可选），不填则继承主 Agent 当前模型。 */
+  model?: string;
 }
 
 export interface CommandSource {

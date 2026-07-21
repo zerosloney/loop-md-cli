@@ -529,13 +529,13 @@ describe("generatePlatform integration", () => {
     );
   });
 
-  it("ralph domain reviewer gets read-only tools on trae (lowercase, no Bash)", () => {
+  it("ralph domain reviewer gets read-only tools on trae (PascalCase, no Bash)", () => {
     generatePlatform("trae", false, ".opencode/templates", "ralph");
 
     const content = readFile(".trae/agents/ralph-reviewer.md");
     assert.ok(
-      content.includes("tools: read, grep, glob"),
-      "ralph-reviewer on trae should get lowercase read-only tools",
+      content.includes("tools: Read, Grep, Glob"),
+      "ralph-reviewer on trae should get PascalCase read-only tools",
     );
     assert.ok(!content.includes("Bash"), "ralph-reviewer on trae must NOT have Bash");
   });

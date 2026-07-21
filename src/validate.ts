@@ -110,7 +110,7 @@ export function validatePlatform(
   for (const a of resolvedDomain.agents) {
     const agentBp = a.role === "orchestrator" ? bpText : "";
     expectedAgents.push(
-      renderAgentWithTemplates(renderer, platform, a.name, a.description, a.role, agentTemplates, renderDomainId, agentBp),
+      renderAgentWithTemplates(renderer, platform, a.name, a.description, a.role, agentTemplates, renderDomainId, agentBp, a.model),
     );
   }
 

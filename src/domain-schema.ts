@@ -39,7 +39,7 @@ export interface EngineConfig {
 export interface ResolvedDomain {
   id: string;
   engine: EngineConfig;
-  agents: { role: string; name: string; description: string }[];
+  agents: { role: string; name: string; description: string; model?: string }[];
   commands: { kind: string; agent: string; name: string; description: string }[];
   backpressure?: BackpressureConfig;
 }
@@ -120,11 +120,16 @@ export function validateDomainFields(domain: unknown): FieldError[] {
         agentNames.add(a.name);
       }
 
-      // description
-      if (typeof a.description !== "string" || a.description.trim() === "") {
-        errors.push({ field: `${prefix}.description`, message: "必须是非空字符串" });
-      }
-    }
+// description
+	      if (typeof a.description !== "string" || a.description.trim() === "") {
+	        errors.push({ field: `${prefix}.description`, message: "必须是非空字符串" });
+	      }
+
+	      // model（可选）
+	      if (a.model !== undefined && (typeof a.model !== "string" || a.model.trim() === "")) {
+	        errors.push({ field: `${prefix}.model`, message: "如果提供，必须是非空字符串" });
+	      }
+	    }
 
     if (!hasOrchestrator) {
       errors.push({ field: "agents", message: "必须至少包含一个 role=orchestrator 的 agent" });
@@ -240,14 +245,15 @@ export function readDomainFile(path: string): ResolvedDomain {
   const domain: ResolvedDomain = {
     id: obj.id as string,
     engine: { type: engineObj.type as "loop" },
-    agents: (obj.agents as unknown[]).map((a) => {
-      const agent = a as Record<string, unknown>;
-      return {
-        role: agent.role as string,
-        name: agent.name as string,
-        description: agent.description as string,
-      };
-    }),
+agents: (obj.agents as unknown[]).map((a) => {
+	      const agent = a as Record<string, unknown>;
+	      return {
+	        role: agent.role as string,
+	        name: agent.name as string,
+	        description: agent.description as string,
+	        model: typeof agent.model === "string" && agent.model.trim() ? agent.model : undefined,
+	      };
+	    }),
     commands: (obj.commands as unknown[]).map((c) => {
       const cmd = c as Record<string, unknown>;
       return {

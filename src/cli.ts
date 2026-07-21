@@ -64,6 +64,11 @@ function printHelp(): void {
     "  --domain, -d <id>       使用指定领域（builtin: ralph, coding, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
+    "模型选项（Trae 平台，可选，不填则继承主 Agent 模型）:",
+    "  --model-orchestrator <name>  编排者模型，如 \"DeepSeek-V4-Pro\"",
+    "  --model-executor <name>      执行者模型，如 \"DeepSeek-V4-Flash\"",
+    "  --model-reviewer <name>      审查者模型，如 \"Doubao_1_6\"",
+    "",
     "平台选项（可与 --all 互斥，也可单独指定）:",
     "  --claude                Claude Code (.claude/)",
     "  --omp                   Oh My Pi (.omp/)",
@@ -85,6 +90,10 @@ function printHelp(): void {
     "  loop-md-cli --incremental --all          # 增量生成所有平台",
     "  loop-md-cli --archive configs.zip        # 导出所有平台为 ZIP",
     "  loop-md-cli --archive configs.zip -d coding  # 导出编程领域",
+    "  loop-md-cli --trae --domain coding \\",
+    "    --model-orchestrator \"DeepSeek-V4-Pro\" \\",
+    "    --model-executor \"DeepSeek-V4-Flash\" \\",
+    "    --model-reviewer \"Doubao_1_6\"   # Trae 平台各角色指定不同模型",
     "  loop-md-cli --help                       # 显示帮助",
     "",
   ];
@@ -106,6 +115,7 @@ interface Args {
   domain: string;
   domainFiles: string[];
   picked: string[];
+  modelOverrides: Record<string, string>;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -122,6 +132,7 @@ function parseArgs(argv: string[]): Args {
     domain: "",
     domainFiles: [],
     picked: [],
+    modelOverrides: {},
   };
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -154,6 +165,15 @@ function parseArgs(argv: string[]): Args {
       i++;
     } else if ((tok === "--domain-file" || tok === "-D") && i + 1 < argv.length) {
       args.domainFiles.push(argv[i + 1]);
+      i++;
+    } else if (tok === "--model-orchestrator" && i + 1 < argv.length) {
+      args.modelOverrides["orchestrator"] = argv[i + 1];
+      i++;
+    } else if (tok === "--model-executor" && i + 1 < argv.length) {
+      args.modelOverrides["executor"] = argv[i + 1];
+      i++;
+    } else if (tok === "--model-reviewer" && i + 1 < argv.length) {
+      args.modelOverrides["reviewer"] = argv[i + 1];
       i++;
     } else if (tok.startsWith("--") && tok.length > 2) {
       const key = tok.slice(2);
@@ -257,11 +277,13 @@ function runGenerate(
   domain?: string,
   domainFiles: string[] = [],
   incremental = false,
+  modelOverrides: Record<string, string> = {},
 ): void {
   const mode = incremental ? "增量" : "全量";
-  console.log(`生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domain ? ` (领域: ${domain})` : ""}`);
+  const modelInfo = Object.keys(modelOverrides).length > 0 ? ` (模型: ${Object.entries(modelOverrides).map(([r, m]) => `${r}=${m}`).join(", ")})` : "";
+  console.log(`生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domain ? ` (领域: ${domain})` : ""}${modelInfo}`);
   for (const key of selected) {
-    const result = generatePlatform(key, dryRun, ".opencode/templates", domain, domainFiles, incremental);
+    const result = generatePlatform(key, dryRun, ".opencode/templates", domain, domainFiles, incremental, undefined, modelOverrides);
     if (incremental && typeof result.written === "number") {
       console.log(`[${key}] ${PLATFORMS[key].dir}/ → agents/${result.agents} commands/${result.commands} (+${result.written} 更新)`);
     } else {
@@ -376,7 +398,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
     interactiveSelect(args.dryRun);
     return;
   }
-  runGenerate(selected, args.dryRun, domainId, args.domainFiles, args.incremental);
+  runGenerate(selected, args.dryRun, domainId, args.domainFiles, args.incremental, args.modelOverrides);
 }
 
 main();

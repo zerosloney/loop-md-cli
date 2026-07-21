@@ -56,6 +56,7 @@ interface AgentSourceEntry {
   role: string;
   key: string;
   description: string;
+  model?: string;
 }
 
 interface CommandSourceEntry {
@@ -98,6 +99,7 @@ export function renderAgentWithTemplates(
   agentTemplates: Record<string, string>,
   domainId?: string,
   backpressureText = "",
+  model?: string,
 ): RenderedAgent {
   const tpl = pickTemplate(agentTemplates, domainId, role);
   if (!tpl) throw new Error(`未找到角色模板: ${role}`);
@@ -105,7 +107,7 @@ export function renderAgentWithTemplates(
   if (domainId) vars.domain = domainId;
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
-  const src: AgentSource = { name: agentName, description, frontmatter, body, role };
+  const src: AgentSource = { name: agentName, description, frontmatter, body, role, model };
   const content = renderer.renderAgent(src, platform);
   return { name: agentName, content };
 }
@@ -142,6 +144,7 @@ export function renderAgent(
   cwd = process.cwd(),
   domainId?: string,
   backpressureText = "",
+  model?: string,
 ): RenderedAgent {
   const platform: Platform = PLATFORMS[platformKey];
   if (!platform) throw new Error(`未知平台: ${platformKey}`);
@@ -152,7 +155,7 @@ export function renderAgent(
   const pkgAgentTemplates = loadAgentTemplates();
   const agentTemplates = { ...pkgAgentTemplates, ...userAgentTemplates };
   const role = roleHint || findAgentRole(agentName);
-  return renderAgentWithTemplates(renderer, platform, agentName, description, role, agentTemplates, domainId, backpressureText);
+  return renderAgentWithTemplates(renderer, platform, agentName, description, role, agentTemplates, domainId, backpressureText, model);
 }
 
 export function renderCommand(
@@ -227,6 +230,7 @@ export function generatePlatform(
   domainFiles: string[] = [],
   incremental = false,
   cwd = process.cwd(),
+  modelOverrides?: Record<string, string>,
 ): { agents: number; commands: number; written?: number } {
   const platform: Platform = PLATFORMS[platformKey];
   if (!platform) throw new Error(`未知平台: ${platformKey}`);
@@ -262,9 +266,10 @@ export function generatePlatform(
     role: a.role,
     key: a.name,
     description: a.description,
+    model: modelOverrides?.[a.role] ?? a.model,
   }));
 
-  for (const { role, key, description } of agentEntries) {
+  for (const { role, key, description, model } of agentEntries) {
     const tpl = pickTemplate(agentTemplates, resolvedDomain.id, role);
     if (!tpl) {
       throw new Error(
@@ -276,7 +281,7 @@ export function generatePlatform(
     agentVars.domain = resolvedDomain.id;
     const rendered = renderTemplate(tpl, agentVars);
     const { frontmatter, body } = parseSource(rendered);
-    const src: AgentSource = { name: key, description, frontmatter, body, role };
+    const src: AgentSource = { name: key, description, frontmatter, body, role, model };
     const out = renderer.renderAgent(src, platform);
     const relativePath = `agents/${key}.md`;
     expectedFiles.set(relativePath, out);

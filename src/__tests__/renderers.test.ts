@@ -112,7 +112,7 @@ describe("renderers", () => {
     assert.ok(out.includes("permissionMode: plan"), "reviewer role should get plan mode");
   });
 
-  it("TraeRenderer restricts reviewer tools by role (lowercase, no Bash)", () => {
+  it("TraeRenderer restricts reviewer tools by role (PascalCase, no Bash)", () => {
     const r = new TraeRenderer();
     const reviewerSrc = {
       ...src,
@@ -120,7 +120,24 @@ describe("renderers", () => {
       role: "reviewer",
     };
     const out = r.renderAgent(reviewerSrc, platform);
-    assert.ok(out.includes("tools: read, grep, glob"), "trae reviewer should get lowercase read-only tools");
+    assert.ok(out.includes("tools: Read, Grep, Glob"), "trae reviewer should get PascalCase read-only tools");
     assert.ok(!out.includes("Bash"), "trae reviewer must NOT have Bash (read-only contract)");
+  });
+
+  it("TraeRenderer outputs model when specified", () => {
+    const r = new TraeRenderer();
+    const modelSrc = {
+      ...src,
+      name: "coding-orchestrator",
+      model: "DeepSeek-V4-Pro",
+    };
+    const out = r.renderAgent(modelSrc, platform);
+    assert.ok(out.includes("model: DeepSeek-V4-Pro"), "trae should output model field");
+  });
+
+  it("TraeRenderer omits model when not specified", () => {
+    const r = new TraeRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(!out.includes("model:"), "trae should not output model field when absent");
   });
 });

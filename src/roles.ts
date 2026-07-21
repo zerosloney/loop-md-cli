@@ -30,7 +30,7 @@ export const ROLE_PERMISSION_MODE: Record<string, string> = {
 // trae 族 tools（小写 + camelCase，参照官方文档）
 // 按 role 索引；留空 = 继承全部工具（不写 tools 字段）
 export const TRAE_TOOLS: Record<string, string> = {
-  reviewer: "read, grep, glob", // 只读审查（无 Bash）
+  reviewer: "Read, Grep, Glob", // 只读审查（无 Bash）
   // orchestrator / executor 留空 = 继承全部
 };
 

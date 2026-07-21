@@ -25,7 +25,7 @@ function loadBuiltinDomains(): ResolvedDomain[] {
   return Object.values(DOMAINS).map((d) => ({
     id: d.id,
     engine: { ...d.engine },
-    agents: d.agents.map((a) => ({ role: a.role, name: a.name, description: a.description })),
+    agents: d.agents.map((a) => ({ role: a.role, name: a.name, description: a.description, model: a.model })),
     commands: d.commands.map((c) => ({ kind: c.kind, agent: c.agent, name: c.name, description: c.description })),
     backpressure: d.backpressure,
   }));
