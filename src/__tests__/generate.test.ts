@@ -96,14 +96,14 @@ describe("generatePlatform integration", () => {
       "ralph-worker should have permissionMode: acceptEdits",
     );
 
-    // With domain "programming", executor name becomes "code-builder" → permissionMode: acceptEdits
-    generatePlatform("codebuddy", false, ".opencode/templates", "programming");
-    const builderContent = readFile(".codebuddy/agents/code-builder.md");
-    assert.ok(builderContent.includes("permissionMode: acceptEdits"), "code-builder should have permissionMode: acceptEdits");
-    assert.ok(builderContent.includes("model: inherit"), "code-builder should have model: inherit");
+    // With domain "coding", executor name becomes "coding-builder" → permissionMode: acceptEdits
+    generatePlatform("codebuddy", false, ".opencode/templates", "coding");
+    const builderContent = readFile(".codebuddy/agents/coding-builder.md");
+    assert.ok(builderContent.includes("permissionMode: acceptEdits"), "coding-builder should have permissionMode: acceptEdits");
+    assert.ok(builderContent.includes("model: inherit"), "coding-builder should have model: inherit");
 
-    const orchestratorContent = readFile(".codebuddy/agents/code-orchestrator.md");
-    assert.ok(orchestratorContent.includes("permissionMode: default"), "code-orchestrator should have permissionMode: default");
+    const orchestratorContent = readFile(".codebuddy/agents/coding-orchestrator.md");
+    assert.ok(orchestratorContent.includes("permissionMode: default"), "coding-orchestrator should have permissionMode: default");
   });
 
   // ─── Test: trae family generates correct files ───
@@ -146,22 +146,22 @@ describe("generatePlatform integration", () => {
 
   // ─── Test: domain mode generates domain-specific names ───
 
-  it("domain mode generates agents with domain-specific names (programming)", () => {
-    const result = generatePlatform("claude", false, ".opencode/templates", "programming");
+  it("domain mode generates agents with domain-specific names (coding)", () => {
+    const result = generatePlatform("claude", false, ".opencode/templates", "coding");
 
-    assert.equal(result.agents, 3, "expected 3 agents for programming domain");
-    assert.equal(result.commands, 1, "expected 1 command for programming domain");
+    assert.equal(result.agents, 3, "expected 3 agents for coding domain");
+    assert.equal(result.commands, 1, "expected 1 command for coding domain");
 
     const agentFiles = listFiles(join(process.cwd(), ".claude/agents"));
-    assert.deepEqual(agentFiles, ["code-builder.md", "code-orchestrator.md", "code-reviewer.md"]);
+    assert.deepEqual(agentFiles, ["coding-builder.md", "coding-orchestrator.md", "coding-reviewer.md"]);
 
     const commandFiles = listFiles(join(process.cwd(), ".claude/commands"));
-    assert.deepEqual(commandFiles, ["code-loop.md"]);
+    assert.deepEqual(commandFiles, ["coding-loop.md"]);
 
-    const orchestratorContent = readFile(".claude/agents/code-orchestrator.md");
-    assert.ok(orchestratorContent.includes("name: code-orchestrator"), "should use domain-specific name");
+    const orchestratorContent = readFile(".claude/agents/coding-orchestrator.md");
+    assert.ok(orchestratorContent.includes("name: coding-orchestrator"), "should use domain-specific name");
     assert.ok(
-      orchestratorContent.includes("Code-Loop 主控 Agent"),
+      orchestratorContent.includes("Coding-Loop 主控 Agent"),
       "should use domain-specific description",
     );
   });
@@ -334,11 +334,11 @@ describe("generatePlatform integration", () => {
 
   // ─── Test: domain-specific command names ───
 
-  it("programming domain generates code-loop command", () => {
-    generatePlatform("opencode", false, ".opencode/templates", "programming");
+  it("coding domain generates coding-loop command", () => {
+    generatePlatform("opencode", false, ".opencode/templates", "coding");
 
     const commandFiles = listFiles(join(process.cwd(), ".opencode/commands"));
-    assert.ok(commandFiles.includes("code-loop.md"), "should have code-loop command");
+    assert.ok(commandFiles.includes("coding-loop.md"), "should have coding-loop command");
   });
 
   it("testing domain generates test-loop command", () => {
@@ -350,11 +350,11 @@ describe("generatePlatform integration", () => {
 
   // ─── Test: domain-specific descriptions in output ───
 
-  it("programming domain agents have domain-specific descriptions", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
+  it("coding domain agents have domain-specific descriptions", () => {
+    generatePlatform("claude", false, ".opencode/templates", "coding");
 
-    const content = readFile(".claude/agents/code-builder.md");
-    assert.ok(content.includes("受控编码与修复的 Builder Agent"), "should have programming domain description");
+    const content = readFile(".claude/agents/coding-builder.md");
+    assert.ok(content.includes("受控编码与修复的 Builder Agent"), "should have coding domain description");
   });
 
   it("testing domain agents have domain-specific descriptions", () => {
@@ -364,18 +364,18 @@ describe("generatePlatform integration", () => {
     assert.ok(content.includes("Test-Loop 中唯一可以编写测试代码"), "should have testing domain description");
   });
 
-  // ─── Test: programming/testing/writing 模板正文 enforce 各自纪律 ───
+  // ─── Test: coding/testing/writing 模板正文 enforce 各自纪律 ───
 
-  it("programming template enforces root-cause grouping + scope drift ban", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
+  it("coding template enforces root-cause grouping + scope drift ban", () => {
+    generatePlatform("claude", false, ".opencode/templates", "coding");
 
-    const orc = readFile(".claude/agents/code-orchestrator.md");
-    assert.ok(orc.includes("根因分组"), "programming orchestrator must enforce root-cause grouping");
-    assert.ok(orc.includes("scope drift"), "programming orchestrator must mention scope drift");
+    const orc = readFile(".claude/agents/coding-orchestrator.md");
+    assert.ok(orc.includes("根因分组"), "coding orchestrator must enforce root-cause grouping");
+    assert.ok(orc.includes("scope drift"), "coding orchestrator must mention scope drift");
 
-    const exec = readFile(".claude/agents/code-builder.md");
-    assert.ok(exec.includes("根因分组"), "programming executor must mention root-cause grouping");
-    assert.ok(exec.includes("forbidden_scope"), "programming executor must enforce forbidden_scope");
+    const exec = readFile(".claude/agents/coding-builder.md");
+    assert.ok(exec.includes("根因分组"), "coding executor must mention root-cause grouping");
+    assert.ok(exec.includes("forbidden_scope"), "coding executor must enforce forbidden_scope");
   });
 
   it("testing template enforces source-freeze + coverage/mutation/empty-assertion", () => {
@@ -406,11 +406,11 @@ describe("generatePlatform integration", () => {
 
   // ─── Test: backpressure 通用化（所有领域都带断路器）───
 
-  it("programming domain orchestrator includes backpressure circuit breaker", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
+  it("coding domain orchestrator includes backpressure circuit breaker", () => {
+    generatePlatform("claude", false, ".opencode/templates", "coding");
 
-    const content = readFile(".claude/agents/code-orchestrator.md");
-    assert.ok(content.includes("## 背压（断路器）"), "programming orchestrator should have backpressure section");
+    const content = readFile(".claude/agents/coding-orchestrator.md");
+    assert.ok(content.includes("## 背压（断路器）"), "coding orchestrator should have backpressure section");
     assert.ok(content.includes("验证命令：`npm test`"), "should use npm test as verification command");
   });
 
@@ -423,11 +423,11 @@ describe("generatePlatform integration", () => {
   });
 
   it("non-orchestrator roles do not get backpressure section", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
+    generatePlatform("claude", false, ".opencode/templates", "coding");
 
-    const builder = readFile(".claude/agents/code-builder.md");
+    const builder = readFile(".claude/agents/coding-builder.md");
     assert.ok(!builder.includes("## 背压"), "executor should not have backpressure section");
-    const reviewer = readFile(".claude/agents/code-reviewer.md");
+    const reviewer = readFile(".claude/agents/coding-reviewer.md");
     assert.ok(!reviewer.includes("## 背压"), "reviewer should not have backpressure section");
   });
 
@@ -441,13 +441,13 @@ describe("generatePlatform integration", () => {
     assert.ok(content.includes("TaskList"), "ralph-orchestrator should be task-list driven");
     assert.ok(content.includes("背压熔断"), "ralph-orchestrator should mention backpressure circuit breaker");
     assert.ok(content.includes("consecutive_failures"), "ralph should track failure count");
-    // 不应包含 programming 范式的 scope/baseline 概念
-    assert.ok(!content.includes("hard_scope"), "ralph should NOT use programming scope model");
-    assert.ok(!content.includes("声明边界"), "ralph should NOT use programming boundary model");
-    assert.ok(!content.includes("Baseline"), "ralph should NOT use programming baseline model");
+    // 不应包含 coding 范式的 scope/baseline 概念
+    assert.ok(!content.includes("hard_scope"), "ralph should NOT use coding scope model");
+    assert.ok(!content.includes("声明边界"), "ralph should NOT use coding boundary model");
+    assert.ok(!content.includes("Baseline"), "ralph should NOT use coding baseline model");
   });
 
-  it("ralph domain executor template differs from programming executor", () => {
+  it("ralph domain executor template differs from coding executor", () => {
     generatePlatform("claude", false, ".opencode/templates", "ralph");
 
     const content = readFile(".claude/agents/ralph-worker.md");
@@ -555,7 +555,7 @@ describe("generatePlatform integration", () => {
   });
 
   // ─── 缺陷 3 回归：incremental 切换领域时必须清理孤儿文件 ───
-  // ralph → programming 切换后，ralph-*.md 必须被清理
+  // ralph → coding 切换后，ralph-*.md 必须被清理
 
   it("incremental mode prunes orphan files when switching domains", () => {
     // 第一轮：用 ralph 领域 incremental 生成
@@ -567,13 +567,13 @@ describe("generatePlatform integration", () => {
       "ralph domain should produce 3 ralph-* agents",
     );
 
-    // 第二轮：切到 programming 领域 incremental 生成
-    generatePlatform("claude", false, ".opencode/templates", "programming", [], true);
-    const afterProgramming = listFiles(join(process.cwd(), ".claude/agents"));
+    // 第二轮：切到 coding 领域 incremental 生成
+    generatePlatform("claude", false, ".opencode/templates", "coding", [], true);
+    const afterCoding = listFiles(join(process.cwd(), ".claude/agents"));
     assert.deepEqual(
-      afterProgramming,
-      ["code-builder.md", "code-orchestrator.md", "code-reviewer.md"],
-      "switching ralph → programming must prune ralph-* orphans",
+      afterCoding,
+      ["coding-builder.md", "coding-orchestrator.md", "coding-reviewer.md"],
+      "switching ralph → coding must prune ralph-* orphans",
     );
   });
 });

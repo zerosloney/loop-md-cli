@@ -11,7 +11,7 @@ describe("domain-loader", () => {
   it("includes all builtin domains by default", () => {
     const domains = resolveDomains();
     const ids = domains.map((d) => d.id);
-    assert.ok(ids.includes("programming"));
+    assert.ok(ids.includes("coding"));
     assert.ok(ids.includes("testing"));
     assert.ok(ids.includes("writing"));
     assert.ok(ids.includes("ralph"));
@@ -19,8 +19,8 @@ describe("domain-loader", () => {
 
   it("finds builtin domain by id", () => {
     const domains = resolveDomains();
-    const d = findDomain(domains, "programming");
-    assert.equal(d.id, "programming");
+    const d = findDomain(domains, "coding");
+    assert.equal(d.id, "coding");
     assert.equal(d.engine.type, "loop");
     assert.ok(d.agents.some((a) => a.role === "orchestrator"));
     assert.ok(d.commands.some((c) => c.kind === "entry"));
@@ -47,18 +47,18 @@ describe("domain-loader", () => {
     });
   });
 
-  it("finds programming domain with backpressure", () => {
+  it("finds coding domain with backpressure", () => {
     const domains = resolveDomains();
-    const programming = findDomain(domains, "programming");
-    assert.equal(programming.id, "programming");
-    assert.deepEqual(programming.backpressure, {
+    const coding = findDomain(domains, "coding");
+    assert.equal(coding.id, "coding");
+    assert.deepEqual(coding.backpressure, {
       type: "test",
       command: "npm test",
       max_failures: 3,
       retry_on_failure: true,
     });
-    const codeLoop = programming.commands.find((c) => c.name === "code-loop");
-    assert.equal(codeLoop?.agent, "code-orchestrator");
+    const codingLoop = coding.commands.find((c) => c.name === "coding-loop");
+    assert.equal(codingLoop?.agent, "coding-orchestrator");
   });
 
   it("finds ralph domain with backpressure", () => {
@@ -109,7 +109,7 @@ describe("domain-loader", () => {
 
       // builtin domains still present
       const ids = domains.map((d) => d.id);
-      assert.ok(ids.includes("programming"));
+      assert.ok(ids.includes("coding"));
       assert.ok(ids.includes("ralph"));
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
@@ -144,7 +144,7 @@ describe("domain-loader", () => {
 
       // 内置领域仍在
       const ids = domains.map((d) => d.id);
-      assert.ok(ids.includes("programming"), "builtins should still be present");
+      assert.ok(ids.includes("coding"), "builtins should still be present");
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -209,7 +209,7 @@ describe("domain-loader", () => {
       const ids = domains.map((d) => d.id);
       assert.ok(ids.includes("good"), "valid file should still load");
       assert.ok(!ids.includes("bad"), "invalid file should be skipped");
-      assert.ok(ids.includes("programming"), "builtins still present");
+      assert.ok(ids.includes("coding"), "builtins still present");
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

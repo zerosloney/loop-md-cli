@@ -12,7 +12,7 @@
  *   loop-md-cli --watch --claude          # 监听模式，自动重新生成
  *   loop-md-cli --incremental --claude    # 增量生成（仅更新变化文件）
  *   loop-md-cli --archive configs.zip     # 导出为 ZIP 压缩包
- *   loop-md-cli --opencode --domain programming           # 领域化生成
+ *   loop-md-cli --opencode --domain coding                # 领域化生成
  *   loop-md-cli --opencode --domain-file ./my.json       # 自定义领域文件
  *   loop-md-cli --opencode --dry-run                     # 演练，不写盘
  *
@@ -61,7 +61,7 @@ function printHelp(): void {
     "  --all, -a               生成所有支持的平台",
     "  --list, -l              列出支持的平台",
     "  --dry-run, -n           演练模式，不实际写入文件",
-    "  --domain, -d <id>       使用指定领域（builtin: ralph, programming, testing, writing；默认 ralph）",
+    "  --domain, -d <id>       使用指定领域（builtin: ralph, coding, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
     "平台选项（可与 --all 互斥，也可单独指定）:",
@@ -79,12 +79,12 @@ function printHelp(): void {
     "  loop-md-cli --opencode --domain testing  # 使用测试领域生成",
     "  loop-md-cli --opencode --dry-run         # 演练模式预览输出",
     "  loop-md-cli --validate --all             # 验证所有平台配置",
-    "  loop-md-cli --validate --claude -d programming  # 验证编程领域 claude 配置",
+    "  loop-md-cli --validate --claude -d coding  # 验证编程领域 claude 配置",
     "  loop-md-cli --watch --all                # 监听所有平台变化",
     "  loop-md-cli --watch --claude -d writing  # 监听 claude + writing 领域",
     "  loop-md-cli --incremental --all          # 增量生成所有平台",
     "  loop-md-cli --archive configs.zip        # 导出所有平台为 ZIP",
-    "  loop-md-cli --archive configs.zip -d programming  # 导出编程领域",
+    "  loop-md-cli --archive configs.zip -d coding  # 导出编程领域",
     "  loop-md-cli --help                       # 显示帮助",
     "",
   ];

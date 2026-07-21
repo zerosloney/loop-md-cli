@@ -1,6 +1,6 @@
 # loop-md-cli
 
-> 从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Code-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。
+> 从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Coding-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。
 
 loop-md-cli 让你**一次编写模板，到处部署**——将统一的 agent/command 定义自动转换为 7 种主流 AI 编程平台的格式，包括 `.md` 前缀的 frontmatter、工具白名单、权限模式等差异，全部自动适配。
 
@@ -25,7 +25,7 @@ loop-md-cli --validate --all # 末行输出"所有平台配置与模板一致。
 要切换到编程/测试/写作领域的特化模板：
 
 ```bash
-npx loop-md-cli --opencode --domain programming --dry-run   # 编程：scope 铁律 + 根因分组
+npx loop-md-cli --opencode --domain coding --dry-run      # 编程：scope 铁律 + 根因分组
 npx loop-md-cli --opencode --domain testing --dry-run       # 测试：源码冻结 + 三项信号
 npx loop-md-cli --opencode --domain writing --dry-run       # 写作：术语/链接/示例质量信号
 npx loop-md-cli --opencode --domain ralph --dry-run         # 通用内核：TaskList + 背压
@@ -80,7 +80,7 @@ loop-md-cli --list
 使用内置领域生成领域特定的 agent 名称和描述：
 
 ```bash
-loop-md-cli --opencode --domain programming
+loop-md-cli --opencode --domain coding
 
 loop-md-cli --claude --domain testing
 
@@ -94,13 +94,13 @@ loop-md-cli --claude --domain ralph
 | 领域 ID | Agent 名称 | 命令名称 | backpressure | 领域铁律 |
 |---------|-----------|---------|--------------|---------|
 | `ralph` | ralph-orchestrator / ralph-worker / ralph-reviewer | ralph-loop | `npm test` / max=3 / 重试 | **内核范式**：TaskList 驱动 + 背压熔断（最通用，自定义领域无专属模板时回退到此） |
-| `programming` | code-orchestrator / code-builder / code-reviewer | code-loop | `npm test` / max=3 / 重试 | scope 铁律（hard/soft/forbidden）+ 根因分组修复 + scope drift 零容忍 |
+| `coding` | coding-orchestrator / coding-builder / coding-reviewer | coding-loop | `npm test` / max=3 / 重试 | scope 铁律（hard/soft/forbidden）+ 根因分组修复 + scope drift 零容忍 |
 | `testing` | test-orchestrator / test-writer / coverage-reviewer | test-loop | `npm test` / max=3 / 重试 | **源码冻结铁律** + 三项信号（coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0） |
 | `writing` | writing-orchestrator / writing-author / writing-reviewer | writing-loop | `npm run lint` / max=2 / 不重试 | 写作边界铁律 + 三项信号（术语漂移 / 死链 / 代码示例）+ 弱门禁 |
 
 > **架构定位**：`ralph` 是 loop-md-cli 的内核范式——**TaskList 驱动 + 背压熔断**，是最通用的 loop 形态。
-> `programming` / `testing` / `writing` 是基于 ralph 内核的领域特化，**每个都有专属模板 enforce 各自的工程纪律**（不只是字符串替换）。
-> `backpressure`（断路器）是通用内核能力，所有内置领域默认携带；`programming` / `testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
+> `coding` / `testing` / `writing` 是基于 ralph 内核的领域特化，**每个都有专属模板 enforce 各自的工程纪律**（不只是字符串替换）。
+> `backpressure`（断路器）是通用内核能力，所有内置领域默认携带；`coding` / `testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
 
 ### 概念分层：Engine 三层架构
 
@@ -178,7 +178,7 @@ loop-md-cli --validate --claude
 
 loop-md-cli --validate --all
 
-loop-md-cli --validate --claude -d programming
+loop-md-cli --validate --claude -d coding
 
 # 退出码：0 = 一致，1 = 发现问题
 ```
@@ -210,7 +210,7 @@ loop-md-cli --watch --claude -d writing
 ```bash
 loop-md-cli --incremental --all
 
-loop-md-cli --incremental --claude -d programming
+loop-md-cli --incremental --claude -d coding
 ```
 
 首次运行等同于全量生成。之后若模板或领域未变，输出 `+0 更新`：
@@ -443,7 +443,7 @@ loop-md-cli --list    # 列出所有支持的平台
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │  模板 (templates/)  │  →  │  领域 (domains/)  │  →  │  渲染器 (render/)  │
-│  orchestrator.md │     │  programming    │     │  NamedRenderer  │
+│  orchestrator.md │     │  coding         │     │  NamedRenderer  │
 │  executor.md     │     │  testing        │     │  ModeRenderer   │
 │  reviewer.md     │     │  自定义 .json   │     │  CodeBuddyRenderer│
 │  loop.md         │     └──────────────┘     │  TraeRenderer   │
@@ -487,7 +487,7 @@ loop-md-cli 会从两个位置加载模板：
 | 领域 | 模板文件 | enforce 的纪律 |
 |------|---------|---------------|
 | `ralph` | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md` | TaskList 驱动 + 背压熔断（最通用，作为自定义领域无专属模板时的回退） |
-| `programming` | `programming-orchestrator.md` / `programming-executor.md` / `programming-reviewer.md` / `programming-loop.md` | scope 铁律 + 根因分组修复 + scope drift 零容忍 |
+| `coding` | `coding-orchestrator.md` / `coding-executor.md` / `coding-reviewer.md` / `coding-loop.md` | scope 铁律 + 根因分组修复 + scope drift 零容忍 |
 | `testing` | `testing-orchestrator.md` / `testing-executor.md` / `testing-reviewer.md` / `testing-loop.md` | 源码冻结 + 三项信号（coverage/mutation/empty-assertion） |
 | `writing` | `writing-orchestrator.md` / `writing-executor.md` / `writing-reviewer.md` / `writing-loop.md` | 写作边界 + 三项信号（术语/链接/示例）+ 弱门禁 |
 
@@ -499,7 +499,7 @@ loop-md-cli 会从两个位置加载模板：
 2. `ralph-<role>.md`（如 `ralph-orchestrator.md`）— 最通用内核范式
 3. 抛错（避免静默生成 0 文件）
 
-自定义领域**至少能跑**（自动回退到 ralph 内核范式），但要做真正的领域特化必须提供专属模板——参考 programming/testing/writing 的实现方式。
+自定义领域**至少能跑**（自动回退到 ralph 内核范式），但要做真正的领域特化必须提供专属模板——参考 coding/testing/writing 的实现方式。
 
 ### 模板格式
 
@@ -544,8 +544,8 @@ loop-md-cli 为不同角色预定义了工具白名单和权限模式：
 
 | 角色 | 工具白名单 | 说明 |
 |------|-----------|------|
-| `reviewer`（code-reviewer / coverage-reviewer） | Read, Grep, Glob, Bash | 只读审查 |
-| `executor`（code-builder / test-writer） | 继承全部 | 可写可执行 |
+| `reviewer`（coding-reviewer / coverage-reviewer） | Read, Grep, Glob, Bash | 只读审查 |
+| `executor`（coding-builder / test-writer） | 继承全部 | 可写可执行 |
 | `orchestrator` | 继承全部 | 主控调度 |
 
 ### 角色 → permissionMode（CodeBuddy）
@@ -598,7 +598,7 @@ export class MyEditorRenderer implements Renderer {
 
 在项目根目录下创建 `.opencode/domains/<id>.json` 文件，格式参考 [§自定义领域](#自定义领域) 的 JSON 示例，或参照内置领域的定义（`src/domains.ts` 的 `DOMAINS` 对象）。
 
-要做领域特化（不只是字符串替换），同时提供专属模板 `.opencode/templates/agents/<id>-<role>.md` 和 `.opencode/templates/commands/<id>-loop.md`——参考 programming/testing/writing 的实现方式。不提供专属模板时，自动回退到 ralph 内核范式（仍然能跑，但不会有领域纪律）。
+要做领域特化（不只是字符串替换），同时提供专属模板 `.opencode/templates/agents/<id>-<role>.md` 和 `.opencode/templates/commands/<id>-loop.md`——参考 coding/testing/writing 的实现方式。不提供专属模板时，自动回退到 ralph 内核范式（仍然能跑，但不会有领域纪律）。
 
 > **自动扫描**：放在 `.opencode/domains/*.json` 的领域文件会被自动发现，`--domain <id>` 直接可用，无需 `--domain-file` 显式指定路径。如果领域文件在别处（如临时调试），用 `--domain-file <path>` 显式传入。
 

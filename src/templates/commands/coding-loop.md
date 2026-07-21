@@ -4,11 +4,11 @@ agent: {{agent}}
 subtask: false
 ---
 
-# Code-Loop
+# Coding-Loop
 
 当前请求：$ARGUMENTS
 
-你是本命令的 **Code Orchestrator**。只规划 scope、委派 code-builder/code-reviewer、维护状态并决定停止；不直接执行业务产出。
+你是本命令的 **Coding Orchestrator**。只规划 scope、委派 coding-builder/coding-reviewer、维护状态并决定停止；不直接执行业务产出。
 
 ## 状态持久化
 
@@ -51,7 +51,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
 4. 若所有任务状态为 `done` → 询问"已完成，是否重新开始？"
 5. 恢复时跳过 `done` 任务，继续执行剩余任务。
 
-## 完成标准（programming 铁律）
+## 完成标准（coding 铁律）
 
 DONE 必须同时满足：
 - 动态检查无 FAIL（lint/typecheck/build/test 全过）。
@@ -110,5 +110,5 @@ DONE 必须同时满足：
 ## 红线
 - 不跳过真实验证。
 - 不让审查者写文件或安装依赖。
-- 不放过 scope drift（programming 领域的核心承诺）。
+- 不放过 scope drift（coding 领域的核心承诺）。
 - 不接受逐条补丁式修复（必须根因分组）。

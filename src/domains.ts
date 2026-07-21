@@ -4,7 +4,7 @@
  * 内置领域（全部采用 loop 引擎范式，每个领域都有专属模板 enforce 各自纪律）：
  *   ralph       → ralph-orchestrator / ralph-worker / ralph-reviewer / ralph-loop
  *                 内核范式：TaskList + 背压熔断（最通用，自定义领域无专属模板时回退到此）
- *   programming → code-orchestrator / code-builder / code-reviewer / code-loop
+ *   coding     → coding-orchestrator / coding-builder / coding-reviewer / coding-loop
  *                 编程领域：scope 铁律（hard/soft/forbidden）+ 根因分组修复 + scope drift 零容忍
  *   testing     → test-orchestrator / test-writer / coverage-reviewer / test-loop
  *                 测试领域：源码冻结铁律 + 三项信号（coverage/mutation/empty-assertion）
@@ -12,7 +12,7 @@
  *                 写作领域：写作边界铁律 + 三项信号（术语/链接/示例）+ 弱门禁
  *
  * backpressure（断路器）是通用内核能力，所有内置领域默认携带：
- *   programming / testing / ralph → npm test, max_failures=3
+ *   coding / testing / ralph → npm test, max_failures=3
  *   writing                      → npm run lint, max_failures=2（弱门禁）
  *
  * 每个 command 必填 agent 字段，显式声明驱动哪个 worker（告别按 -loop 后缀硬拆）。
@@ -34,25 +34,25 @@ export interface Domain {
 const LOOP_ENGINE: EngineConfig = { type: "loop" };
 
 export const DOMAINS: Record<string, Domain> = {
-  programming: {
-    id: "programming",
+  coding: {
+    id: "coding",
     engine: LOOP_ENGINE,
     agents: [
       {
         role: "orchestrator",
-        name: "code-orchestrator",
+        name: "coding-orchestrator",
         description:
-          "Code-Loop 主控 Agent。规划 scope、维护 loop 元状态、委派 code-builder/code-reviewer。铁律：scope drift 零容忍 + 按根因分组委派修复。按真实门禁决定停止。",
+          "Coding-Loop 主控 Agent。规划 scope、维护 loop 元状态、委派 coding-builder/coding-reviewer。铁律：scope drift 零容忍 + 按根因分组委派修复。按真实门禁决定停止。",
       },
       {
         role: "executor",
-        name: "code-builder",
+        name: "coding-builder",
         description:
           "受控编码与修复的 Builder Agent。只在 hard_scope 内改代码，按根因分组修复（禁止逐条补丁），运行真实验证，把失败原样交回 Orchestrator。",
       },
       {
         role: "reviewer",
-        name: "code-reviewer",
+        name: "coding-reviewer",
         description:
           "只读审查 Agent。基于本轮 diff、scope baseline 和真实验证做语义审查 + scope drift 检测，输出可机器路由的 JSON verdict/issues。issues 必须按根因归并，方便 executor 一组一次修。",
       },
@@ -60,8 +60,8 @@ export const DOMAINS: Record<string, Domain> = {
     commands: [
       {
         kind: "entry",
-        agent: "code-orchestrator",
-        name: "code-loop",
+        agent: "coding-orchestrator",
+        name: "coding-loop",
         description:
           "Builder/Reviewer 编码闭环。用 scope、baseline、真实验证和有限轮次收敛代码修改；scope drift 零容忍 + 根因分组修复。",
       },

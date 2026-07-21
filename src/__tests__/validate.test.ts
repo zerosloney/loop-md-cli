@@ -38,7 +38,7 @@ describe("validatePlatform", () => {
   });
 
   it("detects stale when domain was changed", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
+    generatePlatform("claude", false, ".opencode/templates", "coding");
     const result = validatePlatform("claude", ".opencode/templates", "testing");
     assert.ok(!result.clean, "domain mismatch should cause stale detection");
     assert.ok(result.issueCount > 0);
@@ -51,8 +51,8 @@ describe("validatePlatform", () => {
   });
 
   it("domain-specific totalExpected reflects domain entry counts", () => {
-    generatePlatform("claude", false, ".opencode/templates", "programming");
-    const result = validatePlatform("claude", ".opencode/templates", "programming");
+    generatePlatform("claude", false, ".opencode/templates", "coding");
+    const result = validatePlatform("claude", ".opencode/templates", "coding");
     assert.equal(result.totalExpected, 4);
   });
 
@@ -90,17 +90,17 @@ describe("formatValidateResult", () => {
   it("formats result with issues", () => {
     const result = {
       platform: "claude",
-      domain: "programming",
+      domain: "coding",
       totalExpected: 4,
       issues: [
-        { path: ".claude/agents/code-orchestrator.md", type: "stale" as const, message: "第 3 行不一致" },
-        { path: ".claude/commands/code-loop.md", type: "missing" as const, message: "预期文件不存在于磁盘" },
+        { path: ".claude/agents/coding-orchestrator.md", type: "stale" as const, message: "第 3 行不一致" },
+        { path: ".claude/commands/coding-loop.md", type: "missing" as const, message: "预期文件不存在于磁盘" },
       ],
       issueCount: 2,
       clean: false,
     };
     const output = formatValidateResult(result);
-    assert.ok(output.includes("验证平台: claude (领域: programming)"));
+    assert.ok(output.includes("验证平台: claude (领域: coding)"));
     assert.ok(output.includes("❌") || output.includes("问题"));
     assert.ok(output.includes("已过期"));
     assert.ok(output.includes("缺失"));

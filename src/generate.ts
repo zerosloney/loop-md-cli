@@ -178,7 +178,7 @@ export function renderCommand(
 
 /**
  * 按领域优先级挑选 agent 模板，三级回退：
- *   1. `<domainId>-<role>`（如 `programming-orchestrator`）— 领域专属
+ *   1. `<domainId>-<role>`（如 `coding-orchestrator`）— 领域专属
  *   2. `ralph-<role>`（如 `ralph-orchestrator`）— 最通用的内核范式（自定义领域无专属模板时回退到此）
  *   3. 抛错（避免静默生成 0 文件）
  *

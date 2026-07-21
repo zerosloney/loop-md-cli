@@ -25,7 +25,7 @@ describe("template", () => {
     assert.ok("ralph-orchestrator" in agents, "ralph-orchestrator should exist as universal baseline");
     assert.ok(agents["ralph-orchestrator"].includes("{{name}}"));
     // 三个特化领域都应该有专属模板
-    assert.ok("programming-orchestrator" in agents, "programming-orchestrator should exist");
+    assert.ok("coding-orchestrator" in agents, "coding-orchestrator should exist");
     assert.ok("testing-orchestrator" in agents, "testing-orchestrator should exist");
     assert.ok("writing-orchestrator" in agents, "writing-orchestrator should exist");
   });
@@ -36,7 +36,7 @@ describe("template", () => {
     // 4 个领域各自的 command 模板
     assert.ok("ralph-loop" in commands);
     assert.ok(commands["ralph-loop"].includes("{{agent}}"));
-    assert.ok("programming-loop" in commands);
+    assert.ok("coding-loop" in commands);
     assert.ok("testing-loop" in commands);
     assert.ok("writing-loop" in commands);
   });
