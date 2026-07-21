@@ -46,7 +46,7 @@ try {
 
 function printHelp(): void {
   const help = [
-    "loop-md-cli — 从单一源生成多平台 AI 编码 agent/command 配置",
+    "@master0071/loop-md-cli — 从单一源生成多平台 AI 编码 agent/command 配置",
     "",
     "用法:",
     "  loop-md-cli [选项]",

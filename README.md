@@ -5,9 +5,9 @@
 ## 快速上手
 
 ```bash
-npx loop-md-cli --list           # 确认能跑通，看到 7 个平台
-npx loop-md-cli --all            # 默认 ralph 范式，生成 .claude/ .opencode/ 等目录
-npx loop-md-cli --validate --all # 退出码 0 即所有平台配置与模板一致
+npx @master0071/loop-md-cli --list           # 确认能跑通，看到 7 个平台
+npx @master0071/loop-md-cli --all            # 默认 ralph 范式，生成 .claude/ .opencode/ 等目录
+npx @master0071/loop-md-cli --validate --all # 退出码 0 即所有平台配置与模板一致
 ```
 
 需要 Node.js >= 18，零运行时依赖。
