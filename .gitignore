@@ -26,3 +26,6 @@ AGENTS.md
 
 # loop-cli runtime state (per-developer, not shared)
 .loop-cli/state/
+
+# Generated docs (fetched from external sources)
+docs/

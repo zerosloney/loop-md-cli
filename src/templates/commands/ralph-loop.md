@@ -70,25 +70,96 @@ DONE 必须同时满足：
 
 ## 委派机制
 
-你通过输出 JSON 中的 `action` 字段声明决策，平台路由层会据此调度子 agent：
-- `action: "DELEGATE"` → 平台将当前任务上下文注入执行者子 agent 并启动
-- `action: "WAIT_REVIEW"` → 平台将执行者产出注入审查者子 agent 并启动
+**核心规则：必须使用子代理工具执行任务，不得直接编写代码。**
 
-输出 action 后，如果你的工具列表中有 `Agent` 或 `task` 工具，请调用它来实际执行委派；
-否则平台会按其原生机制处理路由。
+### 工具调用方式
+
+你拥有以下子代理工具，必须按流程调用：
+
+1. **ralph-worker** — 执行者，负责在 scope 内完成任务、运行验证
+   - 参数：
+     - `description`: 简短任务描述（3-5个词）
+     - `query`: 详细任务描述，包含当前任务、声明边界、验证命令等
+     - `response_language`: "zh"
+
+2. **ralph-reviewer** — 审查者，负责只读审查、输出 verdict/issues
+   - 参数：
+     - `description`: 简短审查描述（3-5个词）
+     - `query`: 详细审查要求，包含本轮产出、声明边界、基线、执行者检查结果等
+     - `response_language`: "zh"
+
+### 决策流程
+
+每轮必须按以下流程执行：
+
+```
+1. Orchestrator 选择下一个可执行任务
+2. 调用 ralph-worker 执行任务
+3. 等待 worker 完成并获取结果
+4. 调用 ralph-reviewer 审查产出
+5. 根据 reviewer verdict 更新任务状态
+6. 写入状态文件
+7. 判断停止条件
+```
+
+### 注入上下文
+
+调用子代理时，必须注入完整的上下文信息：
+
+#### 给 ralph-worker 的上下文：
+```text
+=== 当前任务 ===
+{task}
+
+=== 声明边界 ===
+hard_scope:
+{hard_scope}
+soft_scope:
+{soft_scope}
+forbidden_scope:
+{forbidden_scope}
+
+=== Baseline ===
+type: {baseline_type}
+value: {baseline_value}
+
+=== 验证命令 ===
+{verify_cmd}
+```
+
+#### 给 ralph-reviewer 的上下文：
+```text
+=== 本轮产出 ===
+{output}
+
+=== 声明边界 ===
+hard_scope:
+{hard_scope}
+soft_scope:
+{soft_scope}
+forbidden_scope:
+{forbidden_scope}
+
+=== Baseline ===
+type: {baseline_type}
+value: {baseline_value}
+
+=== 执行者检查结果 ===
+{worker_result}
+```
 
 ## 执行路径
 
 每轮：
 1. 从 TaskList 选下一个可执行任务（pending + 依赖已 done）。
-2. 按 `## 委派机制` 委派给执行者，注入 `当前任务` + `验证命令`。
-3. 执行者产出后，按 `## 委派机制` 委派给审查者复核。
+2. **调用 ralph-worker 工具**执行任务，注入完整上下文。
+3. 获取 worker 结果后，**调用 ralph-reviewer 工具**审查产出。
 4. 根据审查者 verdict 与验证结果更新任务状态：
    - PASS → 任务 `done`，`consecutive_failures = 0`。
    - NEEDS_FIX → 任务回 `pending`，`consecutive_failures += 1`，附 failure note。
    - REJECT → 任务 `blocked` 或回 `pending`，`consecutive_failures += 1`。
 5. 按 JSON schema 格式写入状态文件（遵循 `### 写入规则` 的原子写入流程）。
-6. 输出本轮 action。
+6. 判断停止条件。
 
 ## 背压熔断
 

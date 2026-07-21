@@ -76,25 +76,126 @@ DONE 必须同时满足：
 
 ## 委派机制
 
-你通过输出 JSON 中的 `action` 字段声明决策，平台路由层会据此调度子 agent：
-- `action: "DELEGATE"` → 平台将当前任务上下文注入执行者子 agent 并启动
-- `action: "WAIT_REVIEW"` → 平台将执行者产出注入审查者子 agent 并启动
+**核心规则：必须使用子代理工具执行任务，不得直接编写代码。**
 
-输出 action 后，如果你的工具列表中有 `Agent` 或 `task` 工具，请调用它来实际执行委派；
-否则平台会按其原生机制处理路由。
+### 工具调用方式
+
+你拥有以下子代理工具，必须按流程调用：
+
+1. **coding-builder** — 执行者，负责在 scope 内编写代码、按根因分组修复、运行验证
+   - 参数：
+     - `description`: 简短任务描述（3-5个词）
+     - `query`: 详细任务描述，包含当前任务、声明边界、验证命令、风险级别等
+     - `response_language`: "zh"
+
+2. **coding-reviewer** — 审查者，负责只读审查、检测 scope drift、输出 verdict/issues
+   - 参数：
+     - `description`: 简短审查描述（3-5个词）
+     - `query`: 详细审查要求，包含本轮 diff、声明边界、基线、执行者检查结果等
+     - `response_language`: "zh"
+
+### 决策流程
+
+每轮必须按以下流程执行：
+
+```
+1. Orchestrator 选择下一个可执行任务
+2. 调用 coding-builder 执行任务
+3. 等待 builder 完成并获取结果
+4. 调用 coding-reviewer 审查产出
+5. 根据 reviewer verdict 更新任务状态
+6. 写入状态文件
+7. 判断停止条件
+```
+
+### 注入上下文
+
+调用子代理时，必须注入完整的上下文信息：
+
+#### 给 coding-builder 的上下文：
+```text
+=== 当前任务 ===
+{task}
+
+=== 声明边界 ===
+hard_scope:
+{hard_scope}
+soft_scope:
+{soft_scope}
+forbidden_scope:
+{forbidden_scope}
+
+=== Baseline ===
+type: {baseline_type}
+value: {baseline_value}
+
+=== 项目脚本 ===
+lint: {lint_cmd}
+typecheck: {typecheck_cmd}
+build: {build_cmd}
+test: {test_cmd}
+
+=== Risk Level ===
+{risk_level}
+
+=== Risk Patterns ===
+{risk_patterns}
+
+=== Detected Stack ===
+{detected_stack}
+
+=== Scripts Gap ===
+{scripts_gap}
+```
+
+#### 给 coding-reviewer 的上下文：
+```text
+=== 本轮 diff ===
+{diff}
+
+=== 声明边界 ===
+hard_scope:
+{hard_scope}
+soft_scope:
+{soft_scope}
+forbidden_scope:
+{forbidden_scope}
+
+=== Baseline ===
+type: {baseline_type}
+value: {baseline_value}
+
+=== 执行者检查结果 ===
+{builder_result}
+
+=== Risk Level ===
+{risk_level}
+
+=== Risk Patterns ===
+{risk_patterns}
+
+=== Detected Stack ===
+{detected_stack}
+
+=== Scripts Gap ===
+{scripts_gap}
+
+=== prior_cycles_summary ===
+{prior_cycles_summary}
+```
 
 ## 执行路径
 
 每轮：
 1. 从 TaskList 选下一个可执行任务（pending + 依赖已 done）。
-2. 按 `## 委派机制` 委派给执行者，注入 `当前任务` + `声明边界` + `验证命令`。
-3. 执行者产出后，按 `## 委派机制` 委派给审查者复核。
+2. **调用 coding-builder 工具**执行任务，注入完整上下文。
+3. 获取 builder 结果后，**调用 coding-reviewer 工具**审查产出。
 4. 根据审查者 verdict 与验证结果更新任务状态：
    - PASS → 任务 `done`，`consecutive_failures = 0`。
    - NEEDS_FIX → 任务回 `pending`，`consecutive_failures += 1`，附 failure note。
    - REJECT → 任务 `blocked` 或回 `pending`，`consecutive_failures += 1`。
 5. 按 JSON schema 格式写入状态文件（遵循 `### 写入规则` 的原子写入流程）。
-6. 输出本轮 action。
+6. 判断停止条件。
 
 ## 停止
 
@@ -107,8 +208,10 @@ DONE 必须同时满足：
 6. STOPPED
 
 停止时按 JSON schema 写入最终状态，设置 `stop_reason` 为对应枚举值。
+
 ## 红线
 - 不跳过真实验证。
 - 不让审查者写文件或安装依赖。
 - 不放过 scope drift（coding 领域的核心承诺）。
 - 不接受逐条补丁式修复（必须根因分组）。
+- **不直接编写代码**（必须通过 coding-builder 子代理）。
