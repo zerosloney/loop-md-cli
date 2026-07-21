@@ -4,7 +4,7 @@
  * 关键设计：用 role 而不是 agent name 做索引，让任意领域的同名角色（如 ralph-reviewer /
  * writing-reviewer / code-reviewer）共享同一份只读契约——避免新增领域时遗漏权限收口。
  *
- * 三族共用约定（named / codebuddy / trae）：
+ * 四族共用约定（named / codebuddy / trae / qwen）：
  *   reviewer(只读)  → Read, Grep, Glob, Bash（trae 不给 Bash）
  *   builder(可写)   → 继承全部工具(留空字符串 = 不写 tools 字段)
  *   orchestrator    → 继承全部工具

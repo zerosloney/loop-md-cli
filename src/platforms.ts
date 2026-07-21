@@ -9,6 +9,7 @@
  *             "mode"     → description + mode + temperature/steps + permission(细粒度), opencode/kilo
  *             "codebuddy"→ name + description + model:inherit + tools + permissionMode
  *             "trae"     → name + description + tools(小写 + camelCase)
+ *             "qwen"     → name + description + model + tools + disallowedTools + approvalMode
  *   note    人类可读说明（--list 显示）
  */
 
