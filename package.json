@@ -18,7 +18,7 @@
   ],
   "type": "module",
   "bin": {
-    "loop-md-cli": "./dist/cli.js"
+    "loop-md-cli": "dist/cli.js"
   },
   "files": [
     "dist/",
