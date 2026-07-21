@@ -4,6 +4,7 @@ import { NamedRenderer } from "../render/named.js";
 import { ModeRenderer } from "../render/mode.js";
 import { CodeBuddyRenderer } from "../render/codebuddy.js";
 import { TraeRenderer } from "../render/trae.js";
+import { QwenRenderer } from "../render/qwen.js";
 
 const platform = { id: "test", dir: ".test", family: "named" as const, note: "test" };
 
@@ -185,5 +186,35 @@ describe("renderers", () => {
     const r = new TraeRenderer();
     const out = r.renderAgent(src, platform);
     assert.ok(!out.includes("model:"), "trae should not output model field when absent");
+  });
+
+  it("QwenRenderer outputs name, description, and approvalMode for orchestrator", () => {
+    const r = new QwenRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(out.includes("name: code-builder"));
+    assert.ok(out.includes("description: Builder agent"));
+    assert.ok(out.includes("approvalMode: auto-edit"), "orchestrator/executor should get auto-edit");
+  });
+
+  it("QwenRenderer outputs model when specified", () => {
+    const r = new QwenRenderer();
+    const modelSrc = { ...src, name: "coding-orchestrator", model: "qwen3-coder" };
+    const out = r.renderAgent(modelSrc, platform);
+    assert.ok(out.includes("model: qwen3-coder"), "qwen should output model field");
+  });
+
+  it("QwenRenderer omits model when not specified", () => {
+    const r = new QwenRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(!out.includes("model:"), "qwen should not output model when absent");
+  });
+
+  it("QwenRenderer restricts reviewer with tools + disallowedTools + approvalMode plan", () => {
+    const r = new QwenRenderer();
+    const reviewerSrc = { ...src, name: "ralph-reviewer", role: "reviewer" };
+    const out = r.renderAgent(reviewerSrc, platform);
+    assert.ok(out.includes("tools: Read, Grep, Glob, Bash"), "reviewer should get read-only tools");
+    assert.ok(out.includes("disallowedTools: [Write, Edit]"), "reviewer should have disallowed Write/Edit");
+    assert.ok(out.includes("approvalMode: plan"), "reviewer should get plan mode");
   });
 });

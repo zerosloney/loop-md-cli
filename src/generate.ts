@@ -21,6 +21,7 @@ import { NamedRenderer } from "./render/named.js";
 import { ModeRenderer } from "./render/mode.js";
 import { CodeBuddyRenderer } from "./render/codebuddy.js";
 import { TraeRenderer } from "./render/trae.js";
+import { QwenRenderer } from "./render/qwen.js";
 import type { AgentSource, CommandSource, Renderer } from "./render/types.js";
 import {
   loadManifest,
@@ -38,6 +39,7 @@ export const RENDERERS: Record<Family, Renderer> = {
   mode: new ModeRenderer(),
   codebuddy: new CodeBuddyRenderer(),
   trae: new TraeRenderer(),
+  qwen: new QwenRenderer(),
 };
 
 // ── 内部类型 ──

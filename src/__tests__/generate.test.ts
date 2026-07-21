@@ -290,6 +290,30 @@ describe("generatePlatform integration", () => {
     assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
   });
 
+  // ─── Test: qwen platform generates correctly ───
+
+  it("qwen platform generates correctly", () => {
+    const result = generatePlatform("qwen");
+
+    assert.equal(result.agents, 3);
+    assert.equal(result.commands, 1);
+
+    const agentFiles = listFiles(join(process.cwd(), ".qwen/agents"));
+    assert.deepEqual(agentFiles, ["ralph-orchestrator.md", "ralph-reviewer.md", "ralph-worker.md"]);
+
+    const commandFiles = listFiles(join(process.cwd(), ".qwen/commands"));
+    assert.deepEqual(commandFiles, ["ralph-loop.md"]);
+
+    // Verify reviewer has Qwen-specific fields
+    const reviewerContent = readFile(".qwen/agents/ralph-reviewer.md");
+    assert.ok(reviewerContent.includes("disallowedTools: [Write, Edit]"), "qwen reviewer should have disallowedTools");
+    assert.ok(reviewerContent.includes("approvalMode: plan"), "qwen reviewer should have plan mode");
+
+    // Verify orchestrator has auto-edit
+    const orcContent = readFile(".qwen/agents/ralph-orchestrator.md");
+    assert.ok(orcContent.includes("approvalMode: auto-edit"), "qwen orchestrator should have auto-edit");
+  });
+
   // ─── Test: agent files contain body content from templates ───
 
   it("generated agent files contain markdown body content (ralph default)", () => {

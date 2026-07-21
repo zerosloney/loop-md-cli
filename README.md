@@ -27,7 +27,7 @@ loop-md-cli --archive configs.zip --all    # 导出 ZIP
 
 ## 为什么需要它？
 
-6 个 AI 编程平台的 agent 配置格式各不相同，手动维护重复劳动且易遗漏：
+7 个 AI 编程平台的 agent 配置格式各不相同，手动维护重复劳动且易遗漏：
 
 | 平台 | 输出目录 | frontmatter 特征 | 工具名格式 |
 |------|---------|-----------------|-----------|
@@ -36,6 +36,7 @@ loop-md-cli --archive configs.zip --all    # 导出 ZIP
 | Kilo Code | `.kilo/` | 同 OpenCode | snake_case |
 | Trae IDE | `.trae/` | `name` + `description` + `tools` | 小写 + camelCase |
 | CodeBuddy | `.codebuddy/` | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase |
+| Qwen Code | `.qwen/` | `name` + `description` + `model` + `tools` + `disallowedTools` + `approvalMode` | PascalCase |
 | Qoder | `.qoder/` | 同 Claude | PascalCase |
 
 loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象解决这个问题。
@@ -127,6 +128,7 @@ permission:
 |------|---------|---------|--------|
 | Claude Code | `--claude` | `.claude/` | named |
 | Qoder | `--qoder` | `.qoder/` | named |
+| Qwen Code | `--qwen` | `.qwen/` | qwen |
 | OpenCode | `--opencode` | `.opencode/` | mode |
 | Kilo Code | `--kilo` | `.kilo/` | mode |
 | CodeBuddy | `--codebuddy` | `.codebuddy/` | codebuddy |

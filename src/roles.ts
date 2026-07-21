@@ -34,6 +34,19 @@ export const TRAE_TOOLS: Record<string, string> = {
   // orchestrator / executor 留空 = 继承全部
 };
 
+// qwen 族 approvalMode，按 role 索引
+export const QWEN_APPROVAL_MODE: Record<string, string> = {
+  reviewer: "plan", // 只读审查，不执行更改
+  executor: "auto-edit", // 自动批准编辑
+  orchestrator: "auto-edit", // 自动批准编辑
+};
+
+// qwen 族 disallowedTools，按 role 索引；留空 = 不输出
+export const QWEN_DISALLOWED_TOOLS: Record<string, string> = {
+  reviewer: "[Write, Edit]", // 显式禁止写入/编辑
+  // orchestrator / executor 留空 = 不输出
+};
+
 /**
  * 从 agent name 推断 role（orchestrator / executor / reviewer）。
  * 精确匹配 → 后缀匹配（code-executor → executor）→ 前缀匹配（test-orchestrator → orchestrator）→ 默认 orchestrator。

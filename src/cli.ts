@@ -72,6 +72,7 @@ function printHelp(): void {
     "平台选项（可与 --all 互斥，也可单独指定）:",
     "  --claude                Claude Code (.claude/)",
     "  --qoder                 Qoder (.qoder/)",
+    "  --qwen                  Qwen Code (.qwen/)",
     "  --opencode              OpenCode (.opencode/)",
     "  --kilo                  Kilo Code (.kilo/)",
     "  --codebuddy             CodeBuddy (.codebuddy/)",

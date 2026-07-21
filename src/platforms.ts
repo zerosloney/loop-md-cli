@@ -12,7 +12,7 @@
  *   note    人类可读说明（--list 显示）
  */
 
-export type Family = "named" | "mode" | "codebuddy" | "trae";
+export type Family = "named" | "mode" | "codebuddy" | "trae" | "qwen";
 
 export interface Platform {
   id: string;
@@ -42,6 +42,8 @@ export const PLATFORMS: Record<string, Platform> = {
   },
   // ── codebuddy 族：name + description + model:inherit + tools + permissionMode ──
   codebuddy: { id: "codebuddy", dir: ".codebuddy", family: "codebuddy", note: "CodeBuddy" },
+  // ── qwen 族：name + description + model + tools + disallowedTools + approvalMode ──
+  qwen: { id: "qwen", dir: ".qwen", family: "qwen", note: "Qwen Code" },
 };
 
 export const PLATFORM_KEYS = Object.keys(PLATFORMS);
