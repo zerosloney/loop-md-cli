@@ -48,6 +48,8 @@ export class ModeRenderer implements Renderer {
       const v = src.frontmatter[field];
       if (v !== undefined && v !== "") lines.push(formatFrontmatterValue(field, v));
     }
+    // model: 可选，来自 CLI 或领域配置；不指定时省略（继承主 Agent 模型）
+    if (src.model) lines.push(`model: ${src.model}`);
     return assemble(lines, src.body);
   }
 

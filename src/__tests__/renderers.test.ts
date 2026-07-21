@@ -70,6 +70,23 @@ describe("renderers", () => {
     assert.ok(out.includes("mode: subagent"));
   });
 
+  it("ModeRenderer outputs model when specified", () => {
+    const r = new ModeRenderer();
+    const modelSrc = {
+      ...src,
+      name: "coding-orchestrator",
+      model: "anthropic/claude-sonnet-4-20250514",
+    };
+    const out = r.renderAgent(modelSrc, platform);
+    assert.ok(out.includes("model: anthropic/claude-sonnet-4-20250514"), "mode renderer should output model");
+  });
+
+  it("ModeRenderer omits model when not specified", () => {
+    const r = new ModeRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(!out.includes("model:"), "mode renderer should not output model when absent");
+  });
+
   it("CodeBuddyRenderer adds model inherit and permissionMode", () => {
     const r = new CodeBuddyRenderer();
     const reviewerSrc = { ...src, name: "code-reviewer" };
