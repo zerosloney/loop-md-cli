@@ -78,6 +78,18 @@ describe("renderers", () => {
     assert.ok(out.includes("permissionMode: plan"));
   });
 
+  it("CodeBuddyRenderer outputs custom model when specified", () => {
+    const r = new CodeBuddyRenderer();
+    const modelSrc = {
+      ...src,
+      name: "coding-orchestrator",
+      model: "gpt-5.1-codex",
+    };
+    const out = r.renderAgent(modelSrc, platform);
+    assert.ok(out.includes("model: gpt-5.1-codex"), "codebuddy should output custom model alias");
+    assert.ok(!out.includes("model: inherit"), "should not output inherit when custom model is set");
+  });
+
   it("TraeRenderer omits empty tools", () => {
     const r = new TraeRenderer();
     const out = r.renderAgent(src, platform);

@@ -13,8 +13,10 @@ import { assemble } from "./types.js";
 
 export class CodeBuddyRenderer implements Renderer {
   renderAgent(src: AgentSource, _platform: Platform): string {
-    const lines = [`name: ${src.name}`, `description: ${src.description}`, "model: inherit"];
+    const lines = [`name: ${src.name}`, `description: ${src.description}`];
     const role = src.role ?? findAgentRole(src.name);
+    // model: 优先使用指定模型（来自 CLI 或领域配置），无则回落 inherit
+    lines.push(`model: ${src.model ?? "inherit"}`);
     const tools = ROLE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);
     lines.push(`permissionMode: ${ROLE_PERMISSION_MODE[role] ?? "default"}`);
