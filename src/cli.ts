@@ -64,7 +64,7 @@ function printHelp(): void {
     "  --domain, -d <id>       使用指定领域（builtin: ralph, coding, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
-    "模型选项（Trae 平台，可选，不填则继承主 Agent 模型）:",
+    "模型选项（通用，可选，不填则子 agent 继承主会话模型）:",
     "  --model-orchestrator <name>  编排者模型，如 \"DeepSeek-V4-Pro\"",
     "  --model-executor <name>      执行者模型，如 \"DeepSeek-V4-Flash\"",
     "  --model-reviewer <name>      审查者模型，如 \"Doubao_1_6\"",

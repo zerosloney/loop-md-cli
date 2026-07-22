@@ -23,6 +23,10 @@ loop-md-cli --validate --all               # 验证一致性
 loop-md-cli --watch --claude               # 监听文件变化
 loop-md-cli --incremental --all            # 仅更新变化文件
 loop-md-cli --archive configs.zip --all    # 导出 ZIP
+loop-md-cli --trae --domain coding \       # 指定各角色子 agent 模型
+  --model-orchestrator "DeepSeek-V4-Pro" \
+  --model-executor "DeepSeek-V4-Flash" \
+  --model-reviewer "Doubao_1_6"
 ```
 
 ## 为什么需要它？
@@ -38,6 +42,8 @@ loop-md-cli --archive configs.zip --all    # 导出 ZIP
 | CodeBuddy | `.codebuddy/` | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase |
 | Qwen Code | `.qwen/` | `name` + `description` + `model` + `tools` + `disallowedTools` + `approvalMode` | PascalCase |
 | Qoder | `.qoder/` | 同 Claude | PascalCase |
+
+> 所有平台均支持按角色指定子 agent 模型，通过 `--model-orchestrator/executor/reviewer` 参数传入，不指定时子 agent 继承主会话模型。
 
 loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象解决这个问题。
 
@@ -149,6 +155,9 @@ permission:
 | `--dry-run` | `-n` | 演练模式，不实际写入 |
 | `--domain` | `-d` | 使用指定领域 |
 | `--domain-file` | `-D` | 自定义领域文件路径 |
+| `--model-orchestrator` | — | 编排者子 agent 模型（如 `--model-orchestrator "DeepSeek-V4-Pro"`） |
+| `--model-executor` | — | 执行者子 agent 模型 |
+| `--model-reviewer` | — | 审查者子 agent 模型 |
 
 ## License
 
