@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -38,10 +38,29 @@ describe("validatePlatform", () => {
   });
 
   it("detects stale when domain was changed", () => {
-    generatePlatform("claude", false, ".opencode/templates", "coding");
+    generatePlatform("claude", { domain: "coding" });
     const result = validatePlatform("claude", ".opencode/templates", "testing");
     assert.ok(!result.clean, "domain mismatch should cause stale detection");
     assert.ok(result.issueCount > 0);
+  });
+
+  it("does not report stale when disk files use CRLF (Windows autocrlf)", () => {
+    // 生成产物按 LF 写盘；模拟 Windows git autocrlf 把磁盘文件转成 CRLF。
+    generatePlatform("claude");
+    for (const sub of ["agents", "commands"]) {
+      const dir = join(process.cwd(), ".claude", sub);
+      for (const f of readdirSync(dir)) {
+        const p = join(dir, f);
+        writeFileSync(p, readFileSync(p, "utf-8").replace(/\n/g, "\r\n"), "utf-8");
+      }
+    }
+    // 仅换行符差异不应被判为 stale
+    const result = validatePlatform("claude");
+    assert.ok(
+      result.clean,
+      `CRLF-only difference must not be stale, got: ${JSON.stringify(result.issues)}`,
+    );
+    assert.equal(result.issueCount, 0);
   });
 
   it("totalExpected reflects the number of agent + command entries (ralph fallback)", () => {
@@ -51,7 +70,7 @@ describe("validatePlatform", () => {
   });
 
   it("domain-specific totalExpected reflects domain entry counts", () => {
-    generatePlatform("claude", false, ".opencode/templates", "coding");
+    generatePlatform("claude", { domain: "coding" });
     const result = validatePlatform("claude", ".opencode/templates", "coding");
     assert.equal(result.totalExpected, 4);
   });
@@ -93,8 +112,16 @@ describe("formatValidateResult", () => {
       domain: "coding",
       totalExpected: 4,
       issues: [
-        { path: ".claude/agents/coding-orchestrator.md", type: "stale" as const, message: "第 3 行不一致" },
-        { path: ".claude/commands/coding-loop.md", type: "missing" as const, message: "预期文件不存在于磁盘" },
+        {
+          path: ".claude/agents/coding-orchestrator.md",
+          type: "stale" as const,
+          message: "第 3 行不一致",
+        },
+        {
+          path: ".claude/commands/coding-loop.md",
+          type: "missing" as const,
+          message: "预期文件不存在于磁盘",
+        },
       ],
       issueCount: 2,
       clean: false,
@@ -112,7 +139,11 @@ describe("formatValidateResult", () => {
       domain: undefined,
       totalExpected: 4,
       issues: [
-        { path: ".opencode/agents/custom.md", type: "extra" as const, message: "磁盘上存在但预期中无此文件" },
+        {
+          path: ".opencode/agents/custom.md",
+          type: "extra" as const,
+          message: "磁盘上存在但预期中无此文件",
+        },
       ],
       issueCount: 1,
       clean: false,

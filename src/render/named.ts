@@ -9,20 +9,23 @@ import { ROLE_TOOLS, findAgentRole } from "../roles.js";
 import type { Platform } from "../platforms.js";
 import type { AgentSource, CommandSource } from "./types.js";
 import type { Renderer } from "./types.js";
-import { assemble } from "./types.js";
+import { assemble, escapeYamlValue } from "./types.js";
 
 export class NamedRenderer implements Renderer {
   renderAgent(src: AgentSource, _platform: Platform): string {
-    const lines = [`name: ${src.name}`, `description: ${src.description}`];
+    const lines = [
+      `name: ${escapeYamlValue(src.name)}`,
+      `description: ${escapeYamlValue(src.description)}`,
+    ];
     const role = src.role ?? findAgentRole(src.name);
     const tools = ROLE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);
     // model: 可选，来自 CLI 或领域配置；不指定时省略（继承当前会话模型）
-    if (src.model) lines.push(`model: ${src.model}`);
+    if (src.model) lines.push(`model: ${escapeYamlValue(src.model)}`);
     return assemble(lines, src.body);
   }
 
   renderCommand(src: CommandSource, _platform: Platform): string {
-    return assemble([`description: ${src.description}`], src.body);
+    return assemble([`description: ${escapeYamlValue(src.description)}`], src.body);
   }
 }

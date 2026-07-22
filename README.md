@@ -1,101 +1,103 @@
 # loop-md-cli
 
-> 从单一源生成多平台 AI 编码 agent/command 配置的脚手架。一次编写模板，到处部署。
+> Scaffold multi-platform AI coding agent/command configs from a single source. Write templates once, deploy everywhere.
 
-## 快速上手
+> [中文](./README.zh-CN.md) | English
+
+## Quick Start
 
 ```bash
-npx @master0071/loop-md-cli --list           # 确认能跑通，看到 7 个平台
-npx @master0071/loop-md-cli --all            # 默认 ralph 范式，生成 .claude/ .opencode/ 等目录
-npx @master0071/loop-md-cli --validate --all # 退出码 0 即所有平台配置与模板一致
+npx @master0071/loop-md-cli --list           # sanity check — you should see 7 platforms
+npx @master0071/loop-md-cli --all            # default ralph paradigm, emits .claude/ .opencode/ etc.
+npx @master0071/loop-md-cli --validate --all # exit code 0 means every platform matches its templates
 ```
 
-需要 Node.js >= 18，零运行时依赖。
+Requires Node.js >= 18, zero runtime dependencies.
 
-## 基本用法
+## Basic Usage
 
 ```bash
-loop-md-cli --all                          # 所有平台
-loop-md-cli --claude --opencode            # 指定平台
-loop-md-cli --claude --domain coding       # 指定领域
-loop-md-cli --all --dry-run                # 演练，不写入文件
-loop-md-cli --validate --all               # 验证一致性
-loop-md-cli --watch --claude               # 监听文件变化
-loop-md-cli --incremental --all            # 仅更新变化文件
-loop-md-cli --archive configs.zip --all    # 导出 ZIP
-loop-md-cli --trae --domain coding \       # 指定各角色子 agent 模型
+loop-md-cli --all                          # all platforms
+loop-md-cli --claude --opencode            # specific platforms
+loop-md-cli --claude --domain coding       # specific domain
+loop-md-cli --all --dry-run                # dry run, writes nothing
+loop-md-cli --validate --all               # validate consistency
+loop-md-cli --watch --claude               # watch for file changes
+loop-md-cli --incremental --all            # only rewrite changed files
+loop-md-cli --archive configs.zip --all    # export as ZIP
+loop-md-cli --trae --domain coding \       # per-role sub-agent models
   --model-orchestrator "DeepSeek-V4-Pro" \
   --model-executor "DeepSeek-V4-Flash" \
   --model-reviewer "Doubao_1_6"
 ```
 
-## 为什么需要它？
+## Why?
 
-7 个 AI 编程平台的 agent 配置格式各不相同，手动维护重复劳动且易遗漏：
+The 7 AI coding platforms each use a different agent config format; maintaining them by hand is repetitive and error-prone:
 
-| 平台 | 输出目录 | frontmatter 特征 | 工具名格式 |
-|------|---------|-----------------|-----------|
-| Claude Code | `.claude/` | `name` + `description` + `tools` | PascalCase |
-| OpenCode | `.opencode/` | `description` + `mode` + `steps` + `permission` | snake_case |
-| Kilo Code | `.kilo/` | 同 OpenCode | snake_case |
-| Trae IDE | `.trae/` | `name` + `description` + `tools` | 小写 + camelCase |
-| CodeBuddy | `.codebuddy/` | `name` + `description` + `model:inherit` + `tools` + `permissionMode` | PascalCase |
-| Qwen Code | `.qwen/` | `name` + `description` + `model` + `tools` + `disallowedTools` + `approvalMode` | PascalCase |
-| Qoder | `.qoder/` | 同 Claude | PascalCase |
+| Platform    | Output dir    | frontmatter signature                                                           | tool name format  |
+| ----------- | ------------- | ------------------------------------------------------------------------------- | ----------------- |
+| Claude Code | `.claude/`    | `name` + `description` + `tools`                                                | PascalCase        |
+| OpenCode    | `.opencode/`  | `description` + `mode` + `steps` + `permission`                                 | snake_case        |
+| Kilo Code   | `.kilo/`      | same as OpenCode                                                                | snake_case        |
+| Trae IDE    | `.trae/`      | `name` + `description` + `tools`                                                | lower + camelCase |
+| CodeBuddy   | `.codebuddy/` | `name` + `description` + `model:inherit` + `tools` + `permissionMode`           | PascalCase        |
+| Qwen Code   | `.qwen/`      | `name` + `description` + `model` + `tools` + `disallowedTools` + `approvalMode` | PascalCase        |
+| Qoder       | `.qoder/`     | same as Claude                                                                  | PascalCase        |
 
-> 所有平台均支持按角色指定子 agent 模型，通过 `--model-orchestrator/executor/reviewer` 参数传入，不指定时子 agent 继承主会话模型。
+> Every platform supports per-role sub-agent models via `--model-orchestrator/executor/reviewer`. When omitted, sub-agents inherit the main session model.
 
-loop-md-cli 通过 **模板 + 领域 + 渲染器** 三层抽象解决这个问题。
+loop-md-cli solves this with a three-layer abstraction: **templates + domains + renderers**.
 
-## 领域化生成
+## Domain-based Generation
 
-内置 4 个领域，每个有专属模板 enforce 各自工程纪律：
+Four built-in domains, each with dedicated templates enforcing its own engineering discipline:
 
-| 领域 | Agent 名称 | 命令 | 领域铁律 |
-|------|-----------|------|---------|
-| `ralph` | ralph-orchestrator / worker / reviewer | ralph-loop | **内核范式**：TaskList 驱动 + 背压熔断（最通用，自定义领域无专属模板时回退到此） |
-| `coding` | coding-orchestrator / builder / reviewer | coding-loop | scope 铁律 + 根因分组修复 + scope drift 零容忍 |
-| `testing` | test-orchestrator / writer / coverage-reviewer | test-loop | 源码冻结 + 三项信号（coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0） |
-| `writing` | writing-orchestrator / author / reviewer | writing-loop | 写作边界 + 三项信号（术语漂移 / 死链 / 代码示例） |
+| Domain    | Agent names                                    | Command      | Discipline                                                                                                                          |
+| --------- | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop   | **Kernel paradigm**: TaskList-driven + backpressure breaker (most general; fallback for custom domains without dedicated templates) |
+| `coding`  | coding-orchestrator / builder / reviewer       | coding-loop  | scope discipline + root-cause grouped fixes + zero tolerance for scope drift                                                        |
+| `testing` | test-orchestrator / writer / coverage-reviewer | test-loop    | source freeze + three signals (coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0)                                               |
+| `writing` | writing-orchestrator / author / reviewer       | writing-loop | writing boundary + three signals (terminology drift / dead links / code examples)                                                   |
 
 ```bash
 loop-md-cli --opencode --domain coding
 loop-md-cli --opencode --domain testing --dry-run
 ```
 
-> `ralph` 是内核范式，`coding/testing/writing` 是基于 ralph 的领域特化。backpressure 是通用内核能力，`coding/testing` 沿用强门禁（`npm test`），`writing` 用弱门禁（`npm run lint`）。
+> `ralph` is the kernel paradigm; `coding/testing/writing` are domain specializations built on ralph. Backpressure is a general kernel capability: `coding/testing` use a strong gate (`npm test`), `writing` uses a weak gate (`npm run lint`).
 
-### 自定义领域
+### Custom Domains
 
-通过 `--domain-file` 传入自定义 JSON，或放在 `.opencode/domains/<id>.json` 自动发现：
+Pass custom JSON via `--domain-file`, or drop it in `.opencode/domains/<id>.json` for auto-discovery:
 
 ```bash
 loop-md-cli --opencode --domain-file ./my-domain.json
-loop-md-cli --claude --domain my-domain   # 自动扫描 .opencode/domains/
+loop-md-cli --claude --domain my-domain   # auto-scans .opencode/domains/
 ```
 
-JSON 格式要求 `engine: { type: "loop" }`，每个 command 必填 `kind: "entry"` 和 `agent`。
+The JSON requires `engine: { type: "loop" }`, and each command must specify `kind: "entry"` and `agent`.
 
-## 自定义模板
+## Custom Templates
 
-模板从两个位置加载（同名覆盖）：包内置模板 `src/templates/`、用户自定义 `.opencode/templates/`。
+Templates load from two locations (same name overrides): built-in `src/templates/` and user-defined `.opencode/templates/`.
 
-### 三级回退
+### Three-level Fallback
 
-渲染 `<domain>-<role>` 时按顺序查找：
+When rendering `<domain>-<role>`, lookup proceeds in order:
 
-1. `<domain>-<role>.md`（如 `my-domain-orchestrator.md`）— 领域专属
-2. `ralph-<role>.md` — 最通用内核范式
-3. 抛错（避免静默生成 0 文件）
+1. `<domain>-<role>.md` (e.g. `my-domain-orchestrator.md`) — domain-specific
+2. `ralph-<role>.md` — the most general kernel paradigm
+3. throw (avoid silently generating 0 files)
 
-自定义领域至少能跑（回退到 ralph），要做领域特化需提供专属模板。
+A custom domain always runs (falling back to ralph); domain specialization requires dedicated templates.
 
-### 模板格式
+### Template Format
 
 ```markdown
 ---
-name: {{name}}
-description: {{description}}
+name: { { name } }
+description: { { description } }
 mode: subagent
 temperature: 0.2
 steps: 30
@@ -105,59 +107,129 @@ permission:
     "*": allow
 ---
 
-## 角色
+## Role
 
-你是 **{{name}}**，Loop 执行者 Agent。
+You are **{{name}}**, the Loop executor agent.
 ```
 
-### 占位符
+### Placeholders
 
-| 占位符 | 来源 | 适用 |
-|--------|------|------|
-| `{{name}}` | 领域定义的 agent/command 名称 | agent |
-| `{{description}}` | 领域定义的描述 | agent + command |
-| `{{agent}}` | 对应 loop 关联的 orchestrator 名称 | command |
-| `{{backpressure}}` | 领域的背压熔断配置 | orchestrator |
+| Placeholder        | Source                                        | Applies to      |
+| ------------------ | --------------------------------------------- | --------------- |
+| `{{name}}`         | agent/command name from the domain definition | agent           |
+| `{{description}}`  | description from the domain definition        | agent + command |
+| `{{agent}}`        | orchestrator name the loop binds to           | command         |
+| `{{backpressure}}` | the domain's backpressure breaker config      | orchestrator    |
 
-### 内置领域模板
+### Built-in Domain Templates
 
-| 领域 | 模板文件 | 纪律 |
-|------|---------|------|
-| `ralph` | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md` | TaskList + 背压熔断 |
-| `coding` | `coding-orchestrator.md` / `coding-executor.md` / `coding-reviewer.md` / `coding-loop.md` | scope 铁律 + 根因分组 |
-| `testing` | `testing-orchestrator.md` / `testing-executor.md` / `testing-reviewer.md` / `testing-loop.md` | 源码冻结 + 三项信号 |
-| `writing` | `writing-orchestrator.md` / `writing-executor.md` / `writing-reviewer.md` / `writing-loop.md` | 写作边界 + 三项信号 |
+| Domain    | Template files                                                                                | Discipline              |
+| --------- | --------------------------------------------------------------------------------------------- | ----------------------- |
+| `ralph`   | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md`           | TaskList + backpressure |
+| `coding`  | `coding-orchestrator.md` / `coding-executor.md` / `coding-reviewer.md` / `coding-loop.md`     | scope + root-cause      |
+| `testing` | `testing-orchestrator.md` / `testing-executor.md` / `testing-reviewer.md` / `testing-loop.md` | source freeze + signals |
+| `writing` | `writing-orchestrator.md` / `writing-executor.md` / `writing-reviewer.md` / `writing-loop.md` | writing boundary        |
 
-## 支持的平台
+## Supported Platforms
 
-| 平台 | CLI 标志 | 输出目录 | 渲染族 |
-|------|---------|---------|--------|
-| Claude Code | `--claude` | `.claude/` | named |
-| Qoder | `--qoder` | `.qoder/` | named |
-| Qwen Code | `--qwen` | `.qwen/` | qwen |
-| OpenCode | `--opencode` | `.opencode/` | mode |
-| Kilo Code | `--kilo` | `.kilo/` | mode |
-| CodeBuddy | `--codebuddy` | `.codebuddy/` | codebuddy |
-| Trae IDE | `--trae` | `.trae/` | trae |
+| Platform    | CLI flag      | Output dir    | Renderer family |
+| ----------- | ------------- | ------------- | --------------- |
+| Claude Code | `--claude`    | `.claude/`    | named           |
+| Qoder       | `--qoder`     | `.qoder/`     | named           |
+| Qwen Code   | `--qwen`      | `.qwen/`      | qwen            |
+| OpenCode    | `--opencode`  | `.opencode/`  | mode            |
+| Kilo Code   | `--kilo`      | `.kilo/`      | mode            |
+| CodeBuddy   | `--codebuddy` | `.codebuddy/` | codebuddy       |
+| Trae IDE    | `--trae`      | `.trae/`      | trae            |
 
-## 完整 CLI 参考
+## Output Examples
 
-| 选项 | 简写 | 说明 |
-|------|------|------|
-| `--help` | `-h` | 显示帮助信息 |
-| `--version` | `-V` / `-v` | 显示版本号 |
-| `--validate` | — | 验证平台配置与模板一致性 |
-| `--watch` | `-w` | 监听文件变化，自动重新生成 |
-| `--incremental` | `-i` | 增量生成（仅更新变化文件） |
-| `--archive` | `-o` | 导出为 ZIP 压缩包 |
-| `--all` | `-a` | 生成/验证/导出所有平台 |
-| `--list` | `-l` | 列出支持的平台 |
-| `--dry-run` | `-n` | 演练模式，不实际写入 |
-| `--domain` | `-d` | 使用指定领域 |
-| `--domain-file` | `-D` | 自定义领域文件路径 |
-| `--model-orchestrator` | — | 编排者子 agent 模型（如 `--model-orchestrator "DeepSeek-V4-Pro"`） |
-| `--model-executor` | — | 执行者子 agent 模型 |
-| `--model-reviewer` | — | 审查者子 agent 模型 |
+The same ralph domain template produces different frontmatter per renderer family. The following are real outputs of `loop-md-cli --all` (lightly trimmed for brevity).
+
+**named family** (Claude Code / Qoder) — `.claude/agents/ralph-reviewer.md`:
+
+```markdown
+---
+name: ralph-reviewer
+description: Ralph Loop reviewer. Read-only quality gate emitting machine-routable verdict/issues.
+tools: Read, Grep, Glob, Bash
+---
+```
+
+**mode family** (OpenCode / Kilo) — `.opencode/agents/ralph-orchestrator.md` (trimmed):
+
+```markdown
+---
+description: Ralph Loop orchestrator. Maintains the task list, delegates to executor/reviewer, stops on gate decisions.
+mode: subagent
+temperature: 0.3
+steps: 30
+permission:
+  edit: deny
+  bash:
+    "*": deny
+    "test *": allow
+  read: allow
+---
+```
+
+**codebuddy family** — `.codebuddy/agents/ralph-orchestrator.md`:
+
+```markdown
+---
+name: ralph-orchestrator
+description: Ralph Loop orchestrator. Maintains the task list, delegates to executor/reviewer.
+model: inherit
+permissionMode: default
+---
+```
+
+**trae family** — `.trae/agents/ralph-reviewer.md`:
+
+```markdown
+---
+name: ralph-reviewer
+description: Ralph Loop reviewer. Read-only quality gate emitting machine-routable verdict/issues.
+tools: Read, Grep, Glob
+---
+```
+
+**qwen family** — `.qwen/agents/ralph-reviewer.md`:
+
+```markdown
+---
+name: ralph-reviewer
+description: Ralph Loop reviewer. Read-only quality gate emitting machine-routable verdict/issues.
+tools: Read, Grep, Glob, Bash
+disallowedTools: [Write, Edit]
+approvalMode: plan
+---
+```
+
+> Note the qwen family's `disallowedTools: [Write, Edit]` is a YAML flow sequence (array) and must **not** be quoted on render, or it would parse as a string. Only free-text fields (name/description/model) containing dangerous characters like `: ` or ` #` are automatically quoted/escaped.
+
+## Full CLI Reference
+
+| Option                 | Short       | Description                                                                  |
+| ---------------------- | ----------- | ---------------------------------------------------------------------------- |
+| `--help`               | `-h`        | Show help                                                                    |
+| `--version`            | `-V` / `-v` | Show version                                                                 |
+| `--validate`           | —           | Validate platform config against templates                                   |
+| `--watch`              | `-w`        | Watch for changes, regenerate automatically                                  |
+| `--incremental`        | `-i`        | Incremental generation (only rewrite changed files)                          |
+| `--archive`            | `-o`        | Export as a ZIP archive                                                      |
+| `--all`                | `-a`        | Generate/validate/export all platforms                                       |
+| `--list`               | `-l`        | List supported platforms                                                     |
+| `--dry-run`            | `-n`        | Dry run, write nothing                                                       |
+| `--domain`             | `-d`        | Use the given domain                                                         |
+| `--domain-file`        | `-D`        | Path to a custom domain file                                                 |
+| `--model-orchestrator` | —           | Orchestrator sub-agent model (e.g. `--model-orchestrator "DeepSeek-V4-Pro"`) |
+| `--model-executor`     | —           | Executor sub-agent model                                                     |
+| `--model-reviewer`     | —           | Reviewer sub-agent model                                                     |
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). For change history see [CHANGELOG.md](./CHANGELOG.md); for architecture see [docs/architecture.md](./docs/architecture.md).
 
 ## License
 

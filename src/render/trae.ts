@@ -10,12 +10,15 @@ import { TRAE_TOOLS, findAgentRole } from "../roles.js";
 import type { Platform } from "../platforms.js";
 import type { AgentSource, CommandSource } from "./types.js";
 import type { Renderer } from "./types.js";
-import { assemble } from "./types.js";
+import { assemble, escapeYamlValue } from "./types.js";
 
 export class TraeRenderer implements Renderer {
   renderAgent(src: AgentSource, _platform: Platform): string {
-    const lines = [`name: ${src.name}`, `description: ${src.description}`];
-    if (src.model) lines.push(`model: ${src.model}`);
+    const lines = [
+      `name: ${escapeYamlValue(src.name)}`,
+      `description: ${escapeYamlValue(src.description)}`,
+    ];
+    if (src.model) lines.push(`model: ${escapeYamlValue(src.model)}`);
     const role = src.role ?? findAgentRole(src.name);
     const tools = TRAE_TOOLS[role] ?? "";
     if (tools) lines.push(`tools: ${tools}`);
@@ -24,7 +27,10 @@ export class TraeRenderer implements Renderer {
 
   // trae 族命令带 name 字段（与原 generate.py render_command 对齐）
   renderCommand(src: CommandSource, _platform: Platform): string {
-    const lines = [`name: ${src.name}`, `description: ${src.description}`];
+    const lines = [
+      `name: ${escapeYamlValue(src.name)}`,
+      `description: ${escapeYamlValue(src.description)}`,
+    ];
     return assemble(lines, src.body);
   }
 }

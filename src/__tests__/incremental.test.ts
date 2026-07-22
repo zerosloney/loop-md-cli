@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -11,6 +11,7 @@ import {
   detectChanges,
   applyChanges,
   manifestPath,
+  MANIFEST_VERSION,
   type Manifest,
 } from "../incremental.js";
 
@@ -95,13 +96,41 @@ describe("manifest", () => {
     const rootManifest = join(tmpDir, ".loop-cli", "claude.json");
     assert.ok(!existsSync(rootManifest), "manifest must NOT live at .loop-cli/ root");
   });
+
+  // ─── schema 版本：持久化带 version，加载校验，不匹配则全量重建 ───
+
+  it("persists a top-level version field wrapping the files map", () => {
+    saveManifest("claude", { "a.md": { hash: "1" } }, tmpDir);
+    const raw = JSON.parse(readFileSync(manifestPath("claude", tmpDir), "utf-8"));
+    assert.equal(raw.version, MANIFEST_VERSION, "persisted manifest should carry schema version");
+    assert.equal(raw.files["a.md"].hash, "1", "files map should be nested under files");
+  });
+
+  it("treats a legacy flat manifest (no version) as empty → full rebuild", () => {
+    // 旧版本写出的扁平格式：{ "a.md": { hash } }，无 version 字段
+    const path = manifestPath("legacy", tmpDir);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, JSON.stringify({ "a.md": { hash: "stale" } }), "utf-8");
+    const loaded = loadManifest("legacy", tmpDir);
+    assert.deepEqual(loaded, {}, "legacy flat manifest should be discarded (rebuild)");
+  });
+
+  it("treats a mismatched version as empty → full rebuild", () => {
+    const path = manifestPath("future", tmpDir);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({ version: MANIFEST_VERSION + 999, files: { "a.md": { hash: "x" } } }),
+      "utf-8",
+    );
+    const loaded = loadManifest("future", tmpDir);
+    assert.deepEqual(loaded, {}, "mismatched version should be discarded (rebuild)");
+  });
 });
 
 describe("detectChanges", () => {
   it("returns write for new file", () => {
-    const expected = new Map<string, string>([
-      ["agents/orchestrator.md", "content-v1"],
-    ]);
+    const expected = new Map<string, string>([["agents/orchestrator.md", "content-v1"]]);
     const manifest: Manifest = {};
     const changes = detectChanges("/tmp/base", expected, manifest);
     assert.equal(changes.length, 1);
@@ -110,9 +139,7 @@ describe("detectChanges", () => {
 
   it("returns skip for unchanged file", () => {
     const content = "same-content";
-    const expected = new Map<string, string>([
-      ["agents/orchestrator.md", content],
-    ]);
+    const expected = new Map<string, string>([["agents/orchestrator.md", content]]);
     const manifest: Manifest = {
       "agents/orchestrator.md": { hash: computeHash(content) },
     };
@@ -122,9 +149,7 @@ describe("detectChanges", () => {
   });
 
   it("returns write for changed file", () => {
-    const expected = new Map<string, string>([
-      ["agents/orchestrator.md", "new-content"],
-    ]);
+    const expected = new Map<string, string>([["agents/orchestrator.md", "new-content"]]);
     const manifest: Manifest = {
       "agents/orchestrator.md": { hash: computeHash("old-content") },
     };
@@ -155,9 +180,7 @@ describe("detectChanges", () => {
   // 旧实现完全不扫描孤儿，导致切换领域时旧文件永久残留。
 
   it("returns delete for manifest entries absent from expected (orphan cleanup)", () => {
-    const expected = new Map<string, string>([
-      ["agents/orchestrator.md", "v2"],
-    ]);
+    const expected = new Map<string, string>([["agents/orchestrator.md", "v2"]]);
     const manifest: Manifest = {
       "agents/orchestrator.md": { hash: computeHash("v1") }, // 仍存在，会 write
       "agents/old-agent.md": { hash: computeHash("old") }, // 孤儿，应 delete
@@ -170,7 +193,9 @@ describe("detectChanges", () => {
     const deletePaths = deletes.map((c) => c.relativePath).sort();
     assert.deepEqual(deletePaths, ["agents/old-agent.md", "commands/old-cmd.md"]);
     // write 仍在
-    assert.ok(changes.some((c) => c.action === "write" && c.relativePath === "agents/orchestrator.md"));
+    assert.ok(
+      changes.some((c) => c.action === "write" && c.relativePath === "agents/orchestrator.md"),
+    );
   });
 });
 
@@ -184,7 +209,12 @@ describe("applyChanges", () => {
   it("updates manifest with new hashes", () => {
     const content = "test-content";
     const changes = [
-      { relativePath: "agents/orchestrator.md", fullPath: join(tmpDir, "agents/orchestrator.md"), action: "write" as const, content },
+      {
+        relativePath: "agents/orchestrator.md",
+        fullPath: join(tmpDir, "agents/orchestrator.md"),
+        action: "write" as const,
+        content,
+      },
     ];
     const manifest: Manifest = {};
 
@@ -197,7 +227,12 @@ describe("applyChanges", () => {
 
   it("skips non-write actions", () => {
     const changes = [
-      { relativePath: "agents/orchestrator.md", fullPath: join(tmpDir, "a.md"), action: "skip" as const, content: "ignored" },
+      {
+        relativePath: "agents/orchestrator.md",
+        fullPath: join(tmpDir, "a.md"),
+        action: "skip" as const,
+        content: "ignored",
+      },
     ];
     const manifest: Manifest = {};
 
@@ -209,8 +244,18 @@ describe("applyChanges", () => {
 
   it("updates manifest for multiple write actions", () => {
     const changes = [
-      { relativePath: "agents/orchestrator.md", fullPath: join(tmpDir, "a.md"), action: "write" as const, content: "content-a" },
-      { relativePath: "commands/loop.md", fullPath: join(tmpDir, "c.md"), action: "write" as const, content: "content-c" },
+      {
+        relativePath: "agents/orchestrator.md",
+        fullPath: join(tmpDir, "a.md"),
+        action: "write" as const,
+        content: "content-a",
+      },
+      {
+        relativePath: "commands/loop.md",
+        fullPath: join(tmpDir, "c.md"),
+        action: "write" as const,
+        content: "content-c",
+      },
     ];
     const manifest: Manifest = {};
 

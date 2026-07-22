@@ -25,8 +25,18 @@ function loadBuiltinDomains(): ResolvedDomain[] {
   return Object.values(DOMAINS).map((d) => ({
     id: d.id,
     engine: { ...d.engine },
-    agents: d.agents.map((a) => ({ role: a.role, name: a.name, description: a.description, model: a.model })),
-    commands: d.commands.map((c) => ({ kind: c.kind, agent: c.agent, name: c.name, description: c.description })),
+    agents: d.agents.map((a) => ({
+      role: a.role,
+      name: a.name,
+      description: a.description,
+      model: a.model,
+    })),
+    commands: d.commands.map((c) => ({
+      kind: c.kind,
+      agent: c.agent,
+      name: c.name,
+      description: c.description,
+    })),
     backpressure: d.backpressure,
   }));
 }
@@ -50,7 +60,9 @@ function scanDomainDir(cwd: string): ResolvedDomain[] {
       result.push(readDomainFile(fullPath));
     } catch (err) {
       // 单个坏文件不致命：跳过但让用户看到
-      console.error(`[domain-loader] 跳过无效领域文件 ${entry}: ${(err as Error).message.split("\n")[0]}`);
+      console.error(
+        `[domain-loader] 跳过无效领域文件 ${entry}: ${(err as Error).message.split("\n")[0]}`,
+      );
     }
   }
   return result;

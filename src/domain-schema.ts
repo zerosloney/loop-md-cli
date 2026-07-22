@@ -120,16 +120,16 @@ export function validateDomainFields(domain: unknown): FieldError[] {
         agentNames.add(a.name);
       }
 
-// description
-	      if (typeof a.description !== "string" || a.description.trim() === "") {
-	        errors.push({ field: `${prefix}.description`, message: "必须是非空字符串" });
-	      }
+      // description
+      if (typeof a.description !== "string" || a.description.trim() === "") {
+        errors.push({ field: `${prefix}.description`, message: "必须是非空字符串" });
+      }
 
-	      // model（可选）
-	      if (a.model !== undefined && (typeof a.model !== "string" || a.model.trim() === "")) {
-	        errors.push({ field: `${prefix}.model`, message: "如果提供，必须是非空字符串" });
-	      }
-	    }
+      // model（可选）
+      if (a.model !== undefined && (typeof a.model !== "string" || a.model.trim() === "")) {
+        errors.push({ field: `${prefix}.model`, message: "如果提供，必须是非空字符串" });
+      }
+    }
 
     if (!hasOrchestrator) {
       errors.push({ field: "agents", message: "必须至少包含一个 role=orchestrator 的 agent" });
@@ -198,7 +198,11 @@ export function validateDomainFields(domain: unknown): FieldError[] {
 
   // ── backpressure（可选） ──
   if (obj.backpressure !== undefined) {
-    if (typeof obj.backpressure !== "object" || obj.backpressure === null || Array.isArray(obj.backpressure)) {
+    if (
+      typeof obj.backpressure !== "object" ||
+      obj.backpressure === null ||
+      Array.isArray(obj.backpressure)
+    ) {
       errors.push({ field: "backpressure", message: "必须是对象" });
     } else {
       const bp = obj.backpressure as Record<string, unknown>;
@@ -208,7 +212,11 @@ export function validateDomainFields(domain: unknown): FieldError[] {
       if (typeof bp.command !== "string" || bp.command.trim() === "") {
         errors.push({ field: "backpressure.command", message: "必须是非空字符串" });
       }
-      if (typeof bp.max_failures !== "number" || !Number.isInteger(bp.max_failures) || bp.max_failures < 1) {
+      if (
+        typeof bp.max_failures !== "number" ||
+        !Number.isInteger(bp.max_failures) ||
+        bp.max_failures < 1
+      ) {
         errors.push({ field: "backpressure.max_failures", message: "必须是 >= 1 的整数" });
       }
     }
@@ -223,14 +231,14 @@ export function readDomainFile(path: string): ResolvedDomain {
   try {
     raw = readFileSync(path, "utf-8");
   } catch (err) {
-    throw new Error(`无法读取领域文件 ${path}: ${(err as Error).message}`);
+    throw new Error(`无法读取领域文件 ${path}: ${(err as Error).message}`, { cause: err });
   }
 
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`领域文件 JSON 解析失败 (${path}): ${(err as Error).message}`);
+    throw new Error(`领域文件 JSON 解析失败 (${path}): ${(err as Error).message}`, { cause: err });
   }
 
   const fieldErrors = validateDomainFields(json);
@@ -245,15 +253,15 @@ export function readDomainFile(path: string): ResolvedDomain {
   const domain: ResolvedDomain = {
     id: obj.id as string,
     engine: { type: engineObj.type as "loop" },
-agents: (obj.agents as unknown[]).map((a) => {
-	      const agent = a as Record<string, unknown>;
-	      return {
-	        role: agent.role as string,
-	        name: agent.name as string,
-	        description: agent.description as string,
-	        model: typeof agent.model === "string" && agent.model.trim() ? agent.model : undefined,
-	      };
-	    }),
+    agents: (obj.agents as unknown[]).map((a) => {
+      const agent = a as Record<string, unknown>;
+      return {
+        role: agent.role as string,
+        name: agent.name as string,
+        description: agent.description as string,
+        model: typeof agent.model === "string" && agent.model.trim() ? agent.model : undefined,
+      };
+    }),
     commands: (obj.commands as unknown[]).map((c) => {
       const cmd = c as Record<string, unknown>;
       return {
@@ -265,7 +273,11 @@ agents: (obj.agents as unknown[]).map((a) => {
     }),
   };
 
-  if (obj.backpressure && typeof obj.backpressure === "object" && !Array.isArray(obj.backpressure)) {
+  if (
+    obj.backpressure &&
+    typeof obj.backpressure === "object" &&
+    !Array.isArray(obj.backpressure)
+  ) {
     const bp = obj.backpressure as Record<string, unknown>;
     domain.backpressure = {
       type: bp.type as "test" | "lint" | "custom",

@@ -23,14 +23,28 @@ import { createHash } from "node:crypto";
 
 const MANIFEST_DIR = ".loop-cli/cache";
 
+/**
+ * Manifest 持久化格式版本。loadManifest 校验此版本，不匹配（含旧版无 version
+ * 字段的扁平格式）时返回空 manifest 触发全量重建。manifest 只是可再生缓存，
+ * 重建无数据损失，因此版本升级是安全自愈的。
+ */
+export const MANIFEST_VERSION = 1;
+
 // ── 类型 ──
 
 interface ManifestEntry {
   hash: string;
 }
 
+/** 内存中的 manifest：相对路径 → 条目。detectChanges/applyChanges 操作此结构。 */
 export interface Manifest {
   [relativePath: string]: ManifestEntry;
+}
+
+/** 持久化到磁盘的 manifest 文件结构（带 schema 版本）。 */
+interface ManifestFile {
+  version: number;
+  files: Manifest;
 }
 
 // ── 哈希 ──
@@ -47,27 +61,37 @@ export function manifestPath(platformKey: string, cwd = process.cwd()): string {
   return join(cwd, MANIFEST_DIR, `${platformKey}.json`);
 }
 
-/** 读取 manifest，不存在则返回空对象 */
+/** 读取 manifest，不存在/版本不匹配/损坏时返回空对象（触发全量重建）。 */
 export function loadManifest(platformKey: string, cwd = process.cwd()): Manifest {
   const path = manifestPath(platformKey, cwd);
   if (!existsSync(path)) return {};
   try {
-    const raw = readFileSync(path, "utf-8");
-    return JSON.parse(raw) as Manifest;
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as ManifestFile | null;
+    // 版本不匹配（含旧版无 version 字段的扁平格式）→ 视为空，触发全量重建。
+    if (
+      !parsed ||
+      parsed.version !== MANIFEST_VERSION ||
+      typeof parsed.files !== "object" ||
+      parsed.files === null
+    ) {
+      return {};
+    }
+    return parsed.files;
   } catch {
     // 损坏的 manifest 视为空
     return {};
   }
 }
 
-/** 保存 manifest */
+/** 保存 manifest（带 schema 版本包裹）。 */
 export function saveManifest(platformKey: string, manifest: Manifest, cwd = process.cwd()): void {
   const path = manifestPath(platformKey, cwd);
   const dir = join(path, "..");
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
-  writeFileSync(path, JSON.stringify(manifest, null, 2), "utf-8");
+  const file: ManifestFile = { version: MANIFEST_VERSION, files: manifest };
+  writeFileSync(path, JSON.stringify(file, null, 2), "utf-8");
 }
 
 // ── 变更检测 ──
@@ -84,6 +108,8 @@ export interface FileChange {
   action: WriteAction;
   /** 预期内容（action=write 时有值；delete/skip 时为 undefined） */
   content?: string;
+  /** 预期内容哈希（write/skip 时有值，delete 时无）。供 applyChanges 复用，避免重复计算。 */
+  hash?: string;
 }
 
 /**
@@ -104,8 +130,8 @@ export function detectChanges(
     const hash = computeHash(content);
     const prev = manifest[relativePath];
     const fullPath = join(baseDir, relativePath);
-    const action: WriteAction = (!prev || prev.hash !== hash) ? "write" : "skip";
-    changes.push({ relativePath, fullPath, action, content });
+    const action: WriteAction = !prev || prev.hash !== hash ? "write" : "skip";
+    changes.push({ relativePath, fullPath, action, content, hash });
   }
 
   // 2. manifest 有但 expected 没有的文件：delete（清理孤儿）
@@ -154,10 +180,10 @@ export function applyChanges(changes: FileChange[], manifest: Manifest): number 
     }
   }
 
-  // 同步 manifest：write 写入新 hash；delete 移除条目；skip 不动
+  // 同步 manifest：write 写入新 hash（复用 detectChanges 算好的，缺省时回退现算）；delete 移除条目；skip 不动
   for (const change of changes) {
     if (change.action === "write" && change.content !== undefined) {
-      manifest[change.relativePath] = { hash: computeHash(change.content) };
+      manifest[change.relativePath] = { hash: change.hash ?? computeHash(change.content) };
     } else if (change.action === "delete") {
       delete manifest[change.relativePath];
     }

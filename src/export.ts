@@ -11,11 +11,21 @@
  *   loop-md-cli --all --archive configs.zip
  *   loop-md-cli --claude --opencode --archive
  */
-import { existsSync, readdirSync, statSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, copyFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  copyFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { PLATFORMS, PLATFORM_KEYS } from "./platforms.js";
+import { PLATFORMS } from "./platforms.js";
 import { generatePlatform } from "./generate.js";
 
 // ── 导出结果 ──
@@ -74,11 +84,14 @@ export function exportArchive(
     copyDir(join(cwd, ".opencode", "domains"), join(tmpBase, ".opencode", "domains"));
 
     for (const key of platforms) {
-      generatePlatform(key, false, ".opencode/templates", domain, domainFiles, false, tmpBase);
+      generatePlatform(key, { domain, domainFiles, cwd: tmpBase });
     }
 
     // 收集文件
-    interface ZipEntry { name: string; data: Buffer; }
+    interface ZipEntry {
+      name: string;
+      data: Buffer;
+    }
     const entries: ZipEntry[] = [];
 
     for (const key of platforms) {
@@ -129,8 +142,12 @@ const CD_SIG = 0x02014b50;
 const EOCDR_SIG = 0x06054b50;
 const GP_UTF8 = 0x0800; // bit 11: 文件名是 UTF-8
 
-function u16(b: Buffer, o: number, v: number) { b.writeUInt16LE(v, o); }
-function u32(b: Buffer, o: number, v: number) { b.writeUInt32LE(v, o); }
+function u16(b: Buffer, o: number, v: number) {
+  b.writeUInt16LE(v, o);
+}
+function u32(b: Buffer, o: number, v: number) {
+  b.writeUInt32LE(v, o);
+}
 function wstr(b: Buffer, o: number, s: string): number {
   const bytes = Buffer.from(s, "utf-8");
   bytes.copy(b, o);
@@ -143,7 +160,7 @@ const CRC_TABLE = (() => {
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
     }
     table[n] = c >>> 0;
   }
@@ -151,11 +168,11 @@ const CRC_TABLE = (() => {
 })();
 
 function crc32(buf: Buffer): number {
-  let c = 0xFFFFFFFF;
+  let c = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
-    c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   }
-  return (c ^ 0xFFFFFFFF) >>> 0;
+  return (c ^ 0xffffffff) >>> 0;
 }
 
 interface FileInfo {
@@ -170,7 +187,10 @@ interface FileInfo {
 // 把 Date 转为 16 位 time / 16 位 date；避免解压后文件时间显示 1980-00-00。
 function dosDateTime(d: Date): { time: number; date: number } {
   const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
-  const date = (((d.getFullYear() - 1980) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+  const date =
+    (((d.getFullYear() - 1980) & 0x7f) << 9) |
+    (((d.getMonth() + 1) & 0xf) << 5) |
+    (d.getDate() & 0x1f);
   return { time, date };
 }
 
@@ -205,18 +225,29 @@ function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
   for (let i = 0; i < infos.length; i++) {
     const info = infos[i];
     const e = entries[i];
-    u32(buf, pos, LOCAL_SIG); pos += 4;       // signature
-    u16(buf, pos, 20); pos += 2;               // version needed to extract (2.0)
-    u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
-    u16(buf, pos, 0); pos += 2;                // compression method: stored
-    u16(buf, pos, modTime); pos += 2;          // mod time
-    u16(buf, pos, modDate); pos += 2;          // mod date
-    u32(buf, pos, info.crc); pos += 4;         // CRC-32
-    u32(buf, pos, info.size); pos += 4;        // compressed size
-    u32(buf, pos, info.size); pos += 4;        // uncompressed size
-    u16(buf, pos, info.nameBytes); pos += 2;   // file name length
-    u16(buf, pos, 0); pos += 2;                // extra field length
-    pos += wstr(buf, pos, info.name);          // file name (UTF-8 bytes)
+    u32(buf, pos, LOCAL_SIG);
+    pos += 4; // signature
+    u16(buf, pos, 20);
+    pos += 2; // version needed to extract (2.0)
+    u16(buf, pos, GP_UTF8);
+    pos += 2; // general purpose bit flag: UTF-8
+    u16(buf, pos, 0);
+    pos += 2; // compression method: stored
+    u16(buf, pos, modTime);
+    pos += 2; // mod time
+    u16(buf, pos, modDate);
+    pos += 2; // mod date
+    u32(buf, pos, info.crc);
+    pos += 4; // CRC-32
+    u32(buf, pos, info.size);
+    pos += 4; // compressed size
+    u32(buf, pos, info.size);
+    pos += 4; // uncompressed size
+    u16(buf, pos, info.nameBytes);
+    pos += 2; // file name length
+    u16(buf, pos, 0);
+    pos += 2; // extra field length
+    pos += wstr(buf, pos, info.name); // file name (UTF-8 bytes)
     e.data.copy(buf, pos);
     pos += info.size;
   }
@@ -224,36 +255,60 @@ function buildZip(entries: { name: string; data: Buffer }[]): Buffer {
   // Phase 4: 写 central directory
   const cdStart = pos;
   for (const info of infos) {
-    u32(buf, pos, CD_SIG); pos += 4;           // signature
-    u16(buf, pos, 20); pos += 2;               // version made by
-    u16(buf, pos, 20); pos += 2;               // version needed
-    u16(buf, pos, GP_UTF8); pos += 2;          // general purpose bit flag: UTF-8
-    u16(buf, pos, 0); pos += 2;                // compression method: stored
-    u16(buf, pos, modTime); pos += 2;          // mod time
-    u16(buf, pos, modDate); pos += 2;          // mod date
-    u32(buf, pos, info.crc); pos += 4;         // CRC-32
-    u32(buf, pos, info.size); pos += 4;        // compressed size
-    u32(buf, pos, info.size); pos += 4;        // uncompressed size
-    u16(buf, pos, info.nameBytes); pos += 2;   // file name length
-    u16(buf, pos, 0); pos += 2;                // extra field length
-    u16(buf, pos, 0); pos += 2;                // file comment length
-    u16(buf, pos, 0); pos += 2;                // disk number start
-    u16(buf, pos, 0); pos += 2;                // internal attributes
-    u32(buf, pos, 0); pos += 4;                // external attributes
-    u32(buf, pos, info.offset); pos += 4;      // local header offset
+    u32(buf, pos, CD_SIG);
+    pos += 4; // signature
+    u16(buf, pos, 20);
+    pos += 2; // version made by
+    u16(buf, pos, 20);
+    pos += 2; // version needed
+    u16(buf, pos, GP_UTF8);
+    pos += 2; // general purpose bit flag: UTF-8
+    u16(buf, pos, 0);
+    pos += 2; // compression method: stored
+    u16(buf, pos, modTime);
+    pos += 2; // mod time
+    u16(buf, pos, modDate);
+    pos += 2; // mod date
+    u32(buf, pos, info.crc);
+    pos += 4; // CRC-32
+    u32(buf, pos, info.size);
+    pos += 4; // compressed size
+    u32(buf, pos, info.size);
+    pos += 4; // uncompressed size
+    u16(buf, pos, info.nameBytes);
+    pos += 2; // file name length
+    u16(buf, pos, 0);
+    pos += 2; // extra field length
+    u16(buf, pos, 0);
+    pos += 2; // file comment length
+    u16(buf, pos, 0);
+    pos += 2; // disk number start
+    u16(buf, pos, 0);
+    pos += 2; // internal attributes
+    u32(buf, pos, 0);
+    pos += 4; // external attributes
+    u32(buf, pos, info.offset);
+    pos += 4; // local header offset
     pos += wstr(buf, pos, info.name);
   }
 
   // Phase 5: 写 EOCDR
   const actualCdSize = pos - cdStart;
-  u32(buf, pos, EOCDR_SIG); pos += 4;
-  u16(buf, pos, 0); pos += 2;                  // disk number
-  u16(buf, pos, 0); pos += 2;                  // disk with CD start
-  u16(buf, pos, infos.length); pos += 2;       // entries on this disk
-  u16(buf, pos, infos.length); pos += 2;       // total entries
-  u32(buf, pos, actualCdSize); pos += 4;       // CD size
-  u32(buf, pos, cdStart); pos += 4;            // CD offset
-  u16(buf, pos, 0); pos += 2;                  // comment length
+  u32(buf, pos, EOCDR_SIG);
+  pos += 4;
+  u16(buf, pos, 0);
+  pos += 2; // disk number
+  u16(buf, pos, 0);
+  pos += 2; // disk with CD start
+  u16(buf, pos, infos.length);
+  pos += 2; // entries on this disk
+  u16(buf, pos, infos.length);
+  pos += 2; // total entries
+  u32(buf, pos, actualCdSize);
+  pos += 4; // CD size
+  u32(buf, pos, cdStart);
+  pos += 4; // CD offset
+  u16(buf, pos, 0); // comment length
 
   return buf;
 }

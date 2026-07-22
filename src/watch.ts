@@ -89,7 +89,9 @@ export function startWatch(
   // 监听自定义领域文件（单文件，watchFile 更可靠）
   // interval=1000：默认 5s 对领域文件延迟偏大，1s 足够灵敏且几乎零成本。
   for (const file of domainFiles) {
-    watchFile(file, { interval: 1000 }, () => { debouncer.trigger(); });
+    watchFile(file, { interval: 1000 }, () => {
+      debouncer.trigger();
+    });
   }
 
   // 初始生成
@@ -105,10 +107,18 @@ export function startWatch(
   return () => {
     debouncer.dispose();
     for (const w of watchers) {
-      try { w.close(); } catch { /* ignore */ }
+      try {
+        w.close();
+      } catch {
+        /* ignore */
+      }
     }
     for (const file of domainFiles) {
-      try { unwatchFile(file); } catch { /* ignore */ }
+      try {
+        unwatchFile(file);
+      } catch {
+        /* ignore */
+      }
     }
   };
 }
@@ -120,15 +130,12 @@ function runGeneration(
   incremental: boolean,
 ): void {
   for (const key of platforms) {
-    const { agents, commands, written } = generatePlatform(
-      key,
-      false,
-      DEFAULT_TEMPLATES_ROOT,
+    const { agents, commands, written } = generatePlatform(key, {
       domain,
       domainFiles,
       incremental,
       cwd,
-    );
+    });
     if (incremental && typeof written === "number") {
       console.log(`[${key}] → agents/${agents} commands/${commands} (+${written} 更新)`);
     } else {

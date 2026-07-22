@@ -158,20 +158,17 @@ export const DOMAINS: Record<string, Domain> = {
       {
         role: "orchestrator",
         name: "ralph-orchestrator",
-        description:
-          "Ralph Loop 主控 Agent。维护任务列表、委派执行者/审查者，根据门禁决定停止。",
+        description: "Ralph Loop 主控 Agent。维护任务列表、委派执行者/审查者，根据门禁决定停止。",
       },
       {
         role: "executor",
         name: "ralph-worker",
-        description:
-          "Ralph Loop 执行者。在声明边界内逐个完成任务，运行验证，提交变更。",
+        description: "Ralph Loop 执行者。在声明边界内逐个完成任务，运行验证，提交变更。",
       },
       {
         role: "reviewer",
         name: "ralph-reviewer",
-        description:
-          "Ralph Loop 审查者。只读质量阀，输出可机器路由的 verdict/issues。",
+        description: "Ralph Loop 审查者。只读质量阀，输出可机器路由的 verdict/issues。",
       },
     ],
     commands: [
@@ -179,8 +176,7 @@ export const DOMAINS: Record<string, Domain> = {
         kind: "entry",
         agent: "ralph-orchestrator",
         name: "ralph-loop",
-        description:
-          "Ralph Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",
+        description: "Ralph Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",
       },
     ],
     backpressure: {

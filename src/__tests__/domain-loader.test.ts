@@ -89,16 +89,24 @@ describe("domain-loader", () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "loop-md-cli-domain-test-"));
     try {
       const extraFile = join(tmpDir, "my-custom-domain.json");
-      writeFileSync(extraFile, JSON.stringify({
-        id: "custom",
-        engine: { type: "loop" },
-        agents: [
-          { role: "orchestrator", name: "custom-ctrl", description: "Custom orchestrator" },
-        ],
-        commands: [
-          { kind: "entry", agent: "custom-ctrl", name: "custom-loop", description: "Custom loop" },
-        ],
-      }));
+      writeFileSync(
+        extraFile,
+        JSON.stringify({
+          id: "custom",
+          engine: { type: "loop" },
+          agents: [
+            { role: "orchestrator", name: "custom-ctrl", description: "Custom orchestrator" },
+          ],
+          commands: [
+            {
+              kind: "entry",
+              agent: "custom-ctrl",
+              name: "custom-loop",
+              description: "Custom loop",
+            },
+          ],
+        }),
+      );
 
       const domains = resolveDomains([extraFile]);
       const custom = findDomain(domains, "custom");
@@ -128,9 +136,7 @@ describe("domain-loader", () => {
         JSON.stringify({
           id: "foo",
           engine: { type: "loop" },
-          agents: [
-            { role: "orchestrator", name: "foo-orch", description: "Foo orchestrator" },
-          ],
+          agents: [{ role: "orchestrator", name: "foo-orch", description: "Foo orchestrator" }],
           commands: [
             { kind: "entry", agent: "foo-orch", name: "foo-loop", description: "Foo loop" },
           ],
@@ -161,7 +167,9 @@ describe("domain-loader", () => {
           id: "scanned",
           engine: { type: "loop" },
           agents: [{ role: "orchestrator", name: "scanned-orch", description: "from scan" }],
-          commands: [{ kind: "entry", agent: "scanned-orch", name: "scanned-loop", description: "x" }],
+          commands: [
+            { kind: "entry", agent: "scanned-orch", name: "scanned-loop", description: "x" },
+          ],
         }),
       );
 
@@ -173,7 +181,9 @@ describe("domain-loader", () => {
           id: "explicit",
           engine: { type: "loop" },
           agents: [{ role: "orchestrator", name: "explicit-orch", description: "from CLI" }],
-          commands: [{ kind: "entry", agent: "explicit-orch", name: "explicit-loop", description: "y" }],
+          commands: [
+            { kind: "entry", agent: "explicit-orch", name: "explicit-loop", description: "y" },
+          ],
         }),
       );
 

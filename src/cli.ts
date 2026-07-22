@@ -33,8 +33,9 @@ import { readDomainFile } from "./domain-schema.js";
 // ── Package version ──
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
-const PKG_PATH = join(HERE, "..", "..", "package.json");
-let VERSION = "0.1.0";
+// dist/cli.js → 上一级即包根目录（dev 与 npm/pnpm 安装布局均成立）
+const PKG_PATH = join(HERE, "..", "package.json");
+let VERSION = "0.0.0";
 try {
   const pkg = JSON.parse(readFileSync(PKG_PATH, "utf-8"));
   VERSION = pkg.version || VERSION;
@@ -65,9 +66,9 @@ function printHelp(): void {
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
     "模型选项（通用，可选，不填则子 agent 继承主会话模型）:",
-    "  --model-orchestrator <name>  编排者模型，如 \"DeepSeek-V4-Pro\"",
-    "  --model-executor <name>      执行者模型，如 \"DeepSeek-V4-Flash\"",
-    "  --model-reviewer <name>      审查者模型，如 \"Doubao_1_6\"",
+    '  --model-orchestrator <name>  编排者模型，如 "DeepSeek-V4-Pro"',
+    '  --model-executor <name>      执行者模型，如 "DeepSeek-V4-Flash"',
+    '  --model-reviewer <name>      审查者模型，如 "Doubao_1_6"',
     "",
     "平台选项（可与 --all 互斥，也可单独指定）:",
     "  --claude                Claude Code (.claude/)",
@@ -91,9 +92,9 @@ function printHelp(): void {
     "  loop-md-cli --archive configs.zip        # 导出所有平台为 ZIP",
     "  loop-md-cli --archive configs.zip -d coding  # 导出编程领域",
     "  loop-md-cli --trae --domain coding \\",
-    "    --model-orchestrator \"DeepSeek-V4-Pro\" \\",
-    "    --model-executor \"DeepSeek-V4-Flash\" \\",
-    "    --model-reviewer \"Doubao_1_6\"   # Trae 平台各角色指定不同模型",
+    '    --model-orchestrator "DeepSeek-V4-Pro" \\',
+    '    --model-executor "DeepSeek-V4-Flash" \\',
+    '    --model-reviewer "Doubao_1_6"   # Trae 平台各角色指定不同模型',
     "  loop-md-cli --help                       # 显示帮助",
     "",
   ];
@@ -214,7 +215,13 @@ function resolveDomainId(explicit?: string, domainFiles: string[] = []): string 
 
 // ── Interactive selection ──
 
-function interactiveSelect(dryRun: boolean): void {
+function interactiveSelect(
+  dryRun: boolean,
+  domain?: string,
+  domainFiles: string[] = [],
+  incremental = false,
+  modelOverrides: Record<string, string> = {},
+): void {
   if (!process.stdin.isTTY) {
     console.error("错误: 未指定平台且非交互环境。用 --all 或 --<platform>。");
     process.exit(1);
@@ -246,7 +253,9 @@ function interactiveSelect(dryRun: boolean): void {
       }
     }
     if (invalid.length > 0) {
-      console.error(`无效选择: ${invalid.join(", ")}（请输入 1-${PLATFORM_KEYS.length} 的数字，或 0/a 选全部）。`);
+      console.error(
+        `无效选择: ${invalid.join(", ")}（请输入 1-${PLATFORM_KEYS.length} 的数字，或 0/a 选全部）。`,
+      );
       process.exit(1);
     }
     if (picked.length === 0) {
@@ -256,7 +265,7 @@ function interactiveSelect(dryRun: boolean): void {
     finish(picked);
   });
   function finish(selected: string[]): never {
-    runGenerate(selected, dryRun);
+    runGenerate(selected, dryRun, domain, domainFiles, incremental, modelOverrides);
     process.exit(0);
   }
 }
@@ -280,14 +289,31 @@ function runGenerate(
   modelOverrides: Record<string, string> = {},
 ): void {
   const mode = incremental ? "增量" : "全量";
-  const modelInfo = Object.keys(modelOverrides).length > 0 ? ` (模型: ${Object.entries(modelOverrides).map(([r, m]) => `${r}=${m}`).join(", ")})` : "";
-  console.log(`生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domain ? ` (领域: ${domain})` : ""}${modelInfo}`);
+  const modelInfo =
+    Object.keys(modelOverrides).length > 0
+      ? ` (模型: ${Object.entries(modelOverrides)
+          .map(([r, m]) => `${r}=${m}`)
+          .join(", ")})`
+      : "";
+  console.log(
+    `生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domain ? ` (领域: ${domain})` : ""}${modelInfo}`,
+  );
   for (const key of selected) {
-    const result = generatePlatform(key, dryRun, ".opencode/templates", domain, domainFiles, incremental, undefined, modelOverrides);
+    const result = generatePlatform(key, {
+      dryRun,
+      domain,
+      domainFiles,
+      incremental,
+      modelOverrides,
+    });
     if (incremental && typeof result.written === "number") {
-      console.log(`[${key}] ${PLATFORMS[key].dir}/ → agents/${result.agents} commands/${result.commands} (+${result.written} 更新)`);
+      console.log(
+        `[${key}] ${PLATFORMS[key].dir}/ → agents/${result.agents} commands/${result.commands} (+${result.written} 更新)`,
+      );
     } else {
-      console.log(`[${key}] ${PLATFORMS[key].dir}/ → agents/${result.agents} commands/${result.commands}`);
+      console.log(
+        `[${key}] ${PLATFORMS[key].dir}/ → agents/${result.agents} commands/${result.commands}`,
+      );
     }
   }
   console.log("\n完成。修改 agents/ 或 commands/ 后重跑同步。");
@@ -385,7 +411,9 @@ function runCommand(args: Args, domainId: string | undefined): void {
       process.exit(1);
     }
     const result = exportArchive(selected, args.archive, domainId, args.domainFiles);
-    console.log(`📦 已导出 ${result.fileCount} 个文件 (${result.platformCount} 个平台) → ${result.filePath}`);
+    console.log(
+      `📦 已导出 ${result.fileCount} 个文件 (${result.platformCount} 个平台) → ${result.filePath}`,
+    );
     return;
   }
 
@@ -395,10 +423,23 @@ function runCommand(args: Args, domainId: string | undefined): void {
   } else if (args.picked.length > 0) {
     selected = args.picked;
   } else {
-    interactiveSelect(args.dryRun);
+    interactiveSelect(
+      args.dryRun,
+      domainId,
+      args.domainFiles,
+      args.incremental,
+      args.modelOverrides,
+    );
     return;
   }
-  runGenerate(selected, args.dryRun, domainId, args.domainFiles, args.incremental, args.modelOverrides);
+  runGenerate(
+    selected,
+    args.dryRun,
+    domainId,
+    args.domainFiles,
+    args.incremental,
+    args.modelOverrides,
+  );
 }
 
 main();

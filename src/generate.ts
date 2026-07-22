@@ -8,12 +8,17 @@
  *   engine.type (= "loop") → 决定 command 模板 lookup 域
  *   commands[].agent       → 决定 command 模板里 {{agent}} 的取值
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { PLATFORMS, type Family, type Platform } from "./platforms.js";
 import { ENGINE_TYPES, DEFAULT_DOMAIN_ID } from "./registry.js";
-import { loadAgentTemplates, loadCommandTemplates, loadTemplateFiles, renderTemplate } from "./template.js";
+import {
+  loadAgentTemplates,
+  loadCommandTemplates,
+  loadTemplateFiles,
+  renderTemplate,
+} from "./template.js";
 import { parseSource } from "./frontmatter.js";
 import { resolveDomains, findDomain } from "./domain-loader.js";
 import { findAgentRole } from "./roles.js";
@@ -28,7 +33,7 @@ import {
   saveManifest,
   detectChanges,
   applyChanges,
-  type Manifest,
+  computeHash,
 } from "./incremental.js";
 import type { BackpressureConfig, ResolvedDomain } from "./domain-schema.js";
 
@@ -105,7 +110,11 @@ export function renderAgentWithTemplates(
 ): RenderedAgent {
   const tpl = pickTemplate(agentTemplates, domainId, role);
   if (!tpl) throw new Error(`未找到角色模板: ${role}`);
-  const vars: Record<string, string> = { name: agentName, description, backpressure: backpressureText };
+  const vars: Record<string, string> = {
+    name: agentName,
+    description,
+    backpressure: backpressureText,
+  };
   if (domainId) vars.domain = domainId;
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
@@ -127,7 +136,10 @@ export function renderCommandWithTemplates(
 ): RenderedCommand {
   const effectiveEngineType = engineType ?? ENGINE_TYPES[0];
   const tpl = pickCommandTemplate(commandTemplates, domainId, effectiveEngineType);
-  if (!tpl) throw new Error(`未找到命令模板: engine.type=${effectiveEngineType}${domainId ? ` (domain=${domainId})` : ""}`);
+  if (!tpl)
+    throw new Error(
+      `未找到命令模板: engine.type=${effectiveEngineType}${domainId ? ` (domain=${domainId})` : ""}`,
+    );
   const vars: Record<string, string> = { name: commandName, description, agent: agentName };
   if (domainId) vars.domain = domainId;
   const rendered = renderTemplate(tpl, vars);
@@ -157,7 +169,17 @@ export function renderAgent(
   const pkgAgentTemplates = loadAgentTemplates();
   const agentTemplates = { ...pkgAgentTemplates, ...userAgentTemplates };
   const role = roleHint || findAgentRole(agentName);
-  return renderAgentWithTemplates(renderer, platform, agentName, description, role, agentTemplates, domainId, backpressureText, model);
+  return renderAgentWithTemplates(
+    renderer,
+    platform,
+    agentName,
+    description,
+    role,
+    agentTemplates,
+    domainId,
+    backpressureText,
+    model,
+  );
 }
 
 export function renderCommand(
@@ -178,7 +200,16 @@ export function renderCommand(
   const userCommandTemplates = loadTemplateFiles(join(templatesBase, "commands"));
   const pkgCommandTemplates = loadCommandTemplates();
   const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
-  return renderCommandWithTemplates(renderer, platform, commandName, description, agentName, commandTemplates, domainId, engineType);
+  return renderCommandWithTemplates(
+    renderer,
+    platform,
+    commandName,
+    description,
+    agentName,
+    commandTemplates,
+    domainId,
+    engineType,
+  );
 }
 
 /**
@@ -224,16 +255,37 @@ function pickCommandTemplate(
 
 // ── 生成编排 ──
 
+/** generatePlatform 的可选配置。全部字段可选，缺省值与历史行为一致。 */
+export interface GenerateOptions {
+  /** 演练模式：只打印将写入的文件，不落盘（默认 false）。 */
+  dryRun?: boolean;
+  /** 用户模板根目录（相对 cwd，默认 .opencode/templates）。 */
+  templatesRoot?: string;
+  /** 领域 id；缺省回退 ralph 内核范式。 */
+  domain?: string;
+  /** 额外自定义领域文件路径（JSON）。 */
+  domainFiles?: string[];
+  /** 增量生成：仅重写内容变化的文件（默认 false）。 */
+  incremental?: boolean;
+  /** 工作目录（默认 process.cwd()）。 */
+  cwd?: string;
+  /** 按角色覆盖子 agent 模型（orchestrator/executor/reviewer → model）。 */
+  modelOverrides?: Record<string, string>;
+}
+
 export function generatePlatform(
   platformKey: string,
-  dryRun = false,
-  templatesRoot = DEFAULT_TEMPLATES_ROOT,
-  domain?: string,
-  domainFiles: string[] = [],
-  incremental = false,
-  cwd = process.cwd(),
-  modelOverrides?: Record<string, string>,
+  options: GenerateOptions = {},
 ): { agents: number; commands: number; written?: number } {
+  const {
+    dryRun = false,
+    templatesRoot = DEFAULT_TEMPLATES_ROOT,
+    domain,
+    domainFiles = [],
+    incremental = false,
+    cwd = process.cwd(),
+    modelOverrides,
+  } = options;
   const platform: Platform = PLATFORMS[platformKey];
   if (!platform) throw new Error(`未知平台: ${platformKey}`);
 
@@ -241,12 +293,6 @@ export function generatePlatform(
   const base = join(cwd, platform.dir);
   const agentsDir = join(base, "agents");
   const commandsDir = join(base, "commands");
-  try {
-    mkdirSync(agentsDir, { recursive: true });
-    mkdirSync(commandsDir, { recursive: true });
-  } catch (err) {
-    throw new Error(`无法创建输出目录 (${platform.dir}): ${(err as Error).message}`);
-  }
 
   const templatesBase = join(cwd, templatesRoot);
   const userAgentTemplates = loadTemplateFiles(join(templatesBase, "agents"));
@@ -278,8 +324,13 @@ export function generatePlatform(
         `未找到角色模板: ${role} (domain=${resolvedDomain.id})。预期文件 src/templates/agents/${resolvedDomain.id}-${role}.md 或 ${role}.md`,
       );
     }
-    const backpressureText = role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
-    const agentVars: Record<string, string> = { name: key, description, backpressure: backpressureText };
+    const backpressureText =
+      role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
+    const agentVars: Record<string, string> = {
+      name: key,
+      description,
+      backpressure: backpressureText,
+    };
     agentVars.domain = resolvedDomain.id;
     const rendered = renderTemplate(tpl, agentVars);
     const { frontmatter, body } = parseSource(rendered);
@@ -299,11 +350,7 @@ export function generatePlatform(
   }));
 
   for (const { engineType, key, description, agent } of commandEntries) {
-    const tpl = pickCommandTemplate(
-      commandTemplates,
-      resolvedDomain.id,
-      engineType,
-    );
+    const tpl = pickCommandTemplate(commandTemplates, resolvedDomain.id, engineType);
     if (!tpl) {
       throw new Error(
         `未找到命令模板: engine.type=${engineType} (domain=${resolvedDomain.id})。预期文件 src/templates/commands/${resolvedDomain.id}-${engineType}.md 或 ${engineType}.md`,
@@ -326,6 +373,15 @@ export function generatePlatform(
     return { agents: agentCount, commands: commandCount };
   }
 
+  // dry-run 已提前返回，只有真正写盘时才创建输出目录
+  try {
+    mkdirSync(agentsDir, { recursive: true });
+    mkdirSync(commandsDir, { recursive: true });
+  } catch (err) {
+    throw new Error(`无法创建输出目录 (${platform.dir}): ${(err as Error).message}`, {
+      cause: err,
+    });
+  }
 
   // ── 增量模式 ──
   if (incremental) {
@@ -336,15 +392,34 @@ export function generatePlatform(
     return { agents: agentCount, commands: commandCount, written };
   }
 
-  // ── 全量模式（原有逻辑） ──
+  // ── 全量模式 ──
+  // 全量也维护 manifest 并清理孤儿：切换 domain 后，删除工具曾生成、本次不再预期的文件。
+  // 只删 manifest 记录过的（工具自己生成的），用户手写文件不受影响——与增量模式同一安全边界。
+  const manifest = loadManifest(platformKey, cwd);
   for (const [relativePath, content] of expectedFiles) {
     const path = join(base, relativePath);
     try {
       writeFileSync(path, content, "utf-8");
     } catch (err) {
-      throw new Error(`写入失败 ${path}: ${(err as Error).message}`);
+      throw new Error(`写入失败 ${path}: ${(err as Error).message}`, { cause: err });
+    }
+    manifest[relativePath] = { hash: computeHash(content) };
+  }
+  for (const relativePath of Object.keys(manifest)) {
+    if (!expectedFiles.has(relativePath)) {
+      const path = join(base, relativePath);
+      if (existsSync(path)) {
+        try {
+          unlinkSync(path);
+        } catch (err) {
+          // 删除失败要可见，但不能静默；不抛——避免一个文件挂掉整批
+          console.error(`[${relativePath}] 删除失败: ${(err as Error).message}`);
+        }
+      }
+      delete manifest[relativePath];
     }
   }
+  saveManifest(platformKey, manifest, cwd);
 
   return { agents: agentCount, commands: commandCount };
 }

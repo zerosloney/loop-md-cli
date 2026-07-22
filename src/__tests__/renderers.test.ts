@@ -73,7 +73,7 @@ describe("renderers", () => {
     const children: string[] = [];
     for (const l of lines.slice(permIdx + 1)) {
       if (l.trim() === "") continue;
-      if (/^  [A-Za-z]/.test(l) && !/^   /.test(l)) {
+      if (/^ {2}[A-Za-z]/.test(l) && !/^ {3}/.test(l)) {
         children.push(l.trim().split(":")[0]);
       } else if (/^[A-Za-z]/.test(l)) {
         break; // 离开 permission 块
@@ -96,7 +96,10 @@ describe("renderers", () => {
       model: "anthropic/claude-sonnet-4-20250514",
     };
     const out = r.renderAgent(modelSrc, platform);
-    assert.ok(out.includes("model: anthropic/claude-sonnet-4-20250514"), "mode renderer should output model");
+    assert.ok(
+      out.includes("model: anthropic/claude-sonnet-4-20250514"),
+      "mode renderer should output model",
+    );
   });
 
   it("ModeRenderer omits model when not specified", () => {
@@ -122,7 +125,10 @@ describe("renderers", () => {
     };
     const out = r.renderAgent(modelSrc, platform);
     assert.ok(out.includes("model: gpt-5.1-codex"), "codebuddy should output custom model alias");
-    assert.ok(!out.includes("model: inherit"), "should not output inherit when custom model is set");
+    assert.ok(
+      !out.includes("model: inherit"),
+      "should not output inherit when custom model is set",
+    );
   });
 
   it("TraeRenderer omits empty tools", () => {
@@ -144,7 +150,10 @@ describe("renderers", () => {
       role: "reviewer",
     };
     const out = r.renderAgent(reviewerSrc, platform);
-    assert.ok(out.includes("tools: Read, Grep, Glob, Bash"), "reviewer role should get read-only tools");
+    assert.ok(
+      out.includes("tools: Read, Grep, Glob, Bash"),
+      "reviewer role should get read-only tools",
+    );
   });
 
   it("CodeBuddyRenderer restricts reviewer tools and permissionMode by role", () => {
@@ -155,7 +164,10 @@ describe("renderers", () => {
       role: "reviewer",
     };
     const out = r.renderAgent(reviewerSrc, platform);
-    assert.ok(out.includes("tools: Read, Grep, Glob, Bash"), "reviewer role should get read-only tools");
+    assert.ok(
+      out.includes("tools: Read, Grep, Glob, Bash"),
+      "reviewer role should get read-only tools",
+    );
     assert.ok(out.includes("permissionMode: plan"), "reviewer role should get plan mode");
   });
 
@@ -167,7 +179,10 @@ describe("renderers", () => {
       role: "reviewer",
     };
     const out = r.renderAgent(reviewerSrc, platform);
-    assert.ok(out.includes("tools: Read, Grep, Glob"), "trae reviewer should get PascalCase read-only tools");
+    assert.ok(
+      out.includes("tools: Read, Grep, Glob"),
+      "trae reviewer should get PascalCase read-only tools",
+    );
     assert.ok(!out.includes("Bash"), "trae reviewer must NOT have Bash (read-only contract)");
   });
 
@@ -193,7 +208,10 @@ describe("renderers", () => {
     const out = r.renderAgent(src, platform);
     assert.ok(out.includes("name: code-builder"));
     assert.ok(out.includes("description: Builder agent"));
-    assert.ok(out.includes("approvalMode: auto-edit"), "orchestrator/executor should get auto-edit");
+    assert.ok(
+      out.includes("approvalMode: auto-edit"),
+      "orchestrator/executor should get auto-edit",
+    );
   });
 
   it("QwenRenderer outputs model when specified", () => {
@@ -214,7 +232,70 @@ describe("renderers", () => {
     const reviewerSrc = { ...src, name: "ralph-reviewer", role: "reviewer" };
     const out = r.renderAgent(reviewerSrc, platform);
     assert.ok(out.includes("tools: Read, Grep, Glob, Bash"), "reviewer should get read-only tools");
-    assert.ok(out.includes("disallowedTools: [Write, Edit]"), "reviewer should have disallowed Write/Edit");
+    assert.ok(
+      out.includes("disallowedTools: [Write, Edit]"),
+      "reviewer should have disallowed Write/Edit",
+    );
     assert.ok(out.includes("approvalMode: plan"), "reviewer should get plan mode");
+  });
+
+  // ─── YAML 转义回归：自由文本含特殊字符时必须加引号，避免生成非法 frontmatter ───
+
+  it("escapes description containing ': ' so output stays valid YAML", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent({ ...src, description: "Agent: the best builder" }, platform);
+    assert.ok(
+      out.includes('description: "Agent: the best builder"'),
+      "colon-space description must be quoted",
+    );
+  });
+
+  it("escapes description containing ' #' so it is not parsed as a comment", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent({ ...src, description: "Builds stuff # fast" }, platform);
+    assert.ok(
+      out.includes('description: "Builds stuff # fast"'),
+      "hash description must be quoted",
+    );
+  });
+
+  it("does not over-quote model with colon-but-no-space (valid plain scalar)", () => {
+    const r = new NamedRenderer();
+    // openai:gpt-4 的冒号后无空格，是合法 plain scalar，不应加引号
+    const out = r.renderAgent(
+      { ...src, name: "coding-orchestrator", model: "openai:gpt-4" },
+      platform,
+    );
+    assert.ok(out.includes("model: openai:gpt-4"), "colon-without-space model must stay unquoted");
+  });
+
+  it("escapes model containing ': ' (colon followed by space)", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent(
+      { ...src, name: "coding-orchestrator", model: "provider: model-x" },
+      platform,
+    );
+    assert.ok(out.includes('model: "provider: model-x"'), "colon-space model must be quoted");
+  });
+
+  it("escapes inner double quotes when quoting", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent({ ...src, description: 'Says "hi": loudly' }, platform);
+    assert.ok(out.includes('description: "Says \\"hi\\": loudly"'), "inner quotes must be escaped");
+  });
+
+  it("leaves safe values unquoted (no output change for existing templates)", () => {
+    const r = new NamedRenderer();
+    const out = r.renderAgent(src, platform);
+    assert.ok(out.includes("name: code-builder"), "safe name stays unquoted");
+    assert.ok(out.includes("description: Builder agent"), "safe description stays unquoted");
+  });
+
+  it("does not quote role-indexed constants (tools / disallowedTools flow sequence)", () => {
+    const r = new QwenRenderer();
+    const out = r.renderAgent({ ...src, name: "ralph-reviewer", role: "reviewer" }, platform);
+    // disallowedTools 是 YAML flow sequence，绝不能被加引号成字符串
+    assert.ok(out.includes("disallowedTools: [Write, Edit]"), "flow sequence must stay unquoted");
+    assert.ok(out.includes("tools: Read, Grep, Glob, Bash"), "tools list must stay unquoted");
   });
 });

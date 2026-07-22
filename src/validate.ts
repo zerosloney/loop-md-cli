@@ -45,7 +45,9 @@ export interface ValidateResult {
 
 function scanMdFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((f) => f.endsWith(".md")).sort();
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".md"))
+    .sort();
 }
 
 // ── 内部：对比单文件内容 ──
@@ -53,9 +55,13 @@ function scanMdFiles(dir: string): string[] {
 function compareFile(expected: string, actualPath: string): string | null {
   try {
     const actual = readFileSync(actualPath, "utf-8");
-    if (actual === expected) return null;
-    const expLines = expected.split("\n");
-    const actLines = actual.split("\n");
+    // 统一换行符再比较：生成产物按 LF 写盘，但 Windows 上 git autocrlf / 编辑器
+    // 可能把磁盘文件转成 CRLF，不归一化会产生大量 stale 误报。
+    const normExpected = expected.replace(/\r\n/g, "\n");
+    const normActual = actual.replace(/\r\n/g, "\n");
+    if (normActual === normExpected) return null;
+    const expLines = normExpected.split("\n");
+    const actLines = normActual.split("\n");
     const minLen = Math.min(expLines.length, actLines.length);
     for (let i = 0; i < minLen; i++) {
       if (expLines[i] !== actLines[i]) {
@@ -110,14 +116,33 @@ export function validatePlatform(
   for (const a of resolvedDomain.agents) {
     const agentBp = a.role === "orchestrator" ? bpText : "";
     expectedAgents.push(
-      renderAgentWithTemplates(renderer, platform, a.name, a.description, a.role, agentTemplates, renderDomainId, agentBp, a.model),
+      renderAgentWithTemplates(
+        renderer,
+        platform,
+        a.name,
+        a.description,
+        a.role,
+        agentTemplates,
+        renderDomainId,
+        agentBp,
+        a.model,
+      ),
     );
   }
 
   const expectedCommands: RenderedCommand[] = [];
   for (const c of resolvedDomain.commands) {
     expectedCommands.push(
-      renderCommandWithTemplates(renderer, platform, c.name, c.description, c.agent, commandTemplates, renderDomainId, resolvedDomain.engine.type),
+      renderCommandWithTemplates(
+        renderer,
+        platform,
+        c.name,
+        c.description,
+        c.agent,
+        commandTemplates,
+        renderDomainId,
+        resolvedDomain.engine.type,
+      ),
     );
   }
 
@@ -140,7 +165,11 @@ export function validatePlatform(
 
   for (const file of diskAgentFiles) {
     if (!expectedAgentNames.has(file)) {
-      issues.push({ path: join(agentsDir, file), type: "extra", message: "磁盘上存在但预期中无此文件" });
+      issues.push({
+        path: join(agentsDir, file),
+        type: "extra",
+        message: "磁盘上存在但预期中无此文件",
+      });
     }
   }
 
@@ -163,7 +192,11 @@ export function validatePlatform(
 
   for (const file of diskCommandFiles) {
     if (!expectedCommandNames.has(file)) {
-      issues.push({ path: join(commandsDir, file), type: "extra", message: "磁盘上存在但预期中无此文件" });
+      issues.push({
+        path: join(commandsDir, file),
+        type: "extra",
+        message: "磁盘上存在但预期中无此文件",
+      });
     }
   }
 
@@ -178,7 +211,6 @@ export function validatePlatform(
     clean: issues.length === 0,
   };
 }
-
 
 // ── 格式化输出 ──
 

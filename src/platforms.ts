@@ -25,7 +25,12 @@ export interface Platform {
 export const PLATFORMS: Record<string, Platform> = {
   // ── named 族：name + description + tools ──
   claude: { id: "claude", dir: ".claude", family: "named", note: "Claude Code" },
-  qoder: { id: "qoder", dir: ".qoder", family: "named", note: "Qoder CLI(子 agent 用 Agent 工具调度，tools 大写 PascalCase)" },
+  qoder: {
+    id: "qoder",
+    dir: ".qoder",
+    family: "named",
+    note: "Qoder CLI(子 agent 用 Agent 工具调度，tools 大写 PascalCase)",
+  },
   // ── trae 族：name + description + tools(小写 + camelCase) ──
   trae: {
     id: "trae",
