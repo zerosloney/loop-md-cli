@@ -87,7 +87,7 @@ low | medium | high
 每轮：
 - 从 `=== 状态文件路径 ===` 读取状态文件。
 - 按 `### 读取规则` 校验格式合法性。
-- 恢复轮次、consecutive_failures、fail_history、prior_cycles_summary。
+- 恢复轮次、consecutive_failures、stall_counter、fail_history、prior_cycles_summary。
 - 每轮结束时按 JSON schema 写入（遵循原子写入流程）。
 - 停止时设置 `stop_reason`。
 
@@ -122,7 +122,7 @@ low | medium | high
 1. DONE：全部完成标准满足（含零 critical/major + scope 无漂移）。
 2. ESCALATE：审查者 REJECT、边界漂移、manual review required。
 3. HOLD：需求或方案需要用户选择。
-4. STALL：连续无改善。
+4. STALL：`stall_counter` 达到 `STALL_MAX`（=2）——连续 2 轮任务状态签名（所有任务 `id:status` 有序串）无变化。
 5. **MAX_CYCLES (=8)**：达到 8 轮上限仍未 DONE。初始化时设置的硬上限，不被 `fail_history` 或 `round` 覆盖。
 6. STOPPED：用户要求停止。
 

@@ -31,6 +31,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
     }
   ],
   "consecutive_failures": 0,
+  "stall_counter": 0,
   "fail_history": [
     { "task_id": "t1", "round": 1, "reason": "<失败原因>" }
   ],
@@ -43,6 +44,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
 ### 写入规则
 - 每轮结束时写入，先写 `.loop-cli/state/{{name}}.json.tmp`，再重命名为 `.loop-cli/state/{{name}}.json`。
 - 停止时设置 `stop_reason` 字段，`null` 表示仍在运行。
+- 每轮结束时计算"任务状态签名"（所有任务按 id 升序拼成的 `id:status` 有序串）：与上一轮**完全相同** → `stall_counter += 1`；有任一变化 → `stall_counter = 0`。
 
 ### 读取规则
 1. 解析 JSON，校验 `version === 1` 且所有必填字段存在。
@@ -71,8 +73,8 @@ DONE 必须同时满足：
 5. 探测项目脚本（lint/typecheck/build/test）。
 6. 风险评估（low / medium / high）。
 7. 技术栈推断（detected_stack）。
-8. 初始化 `consecutive_failures = 0`、`round = 0`、`stop_reason = null`、`prior_cycles_summary = ""`。
-9. 设置 `MAX_CYCLES = 8`（超过此轮次仍未 DONE 则强制停止）。每轮约消耗 2-3 个 agentic step，确保 `steps >= MAX_CYCLES × 3`。
+8. 初始化 `consecutive_failures = 0`、`stall_counter = 0`、`round = 0`、`stop_reason = null`、`prior_cycles_summary = ""`。
+9. 设置 `MAX_CYCLES = 8`（超过此轮次仍未 DONE 则强制停止）与 `STALL_MAX = 2`（连续 2 轮任务状态签名无变化则判 STALL）。二者均为初始化硬上限，不被 `fail_history` 或 `round` 覆盖。每轮约消耗 2-3 个 agentic step，确保 `steps >= MAX_CYCLES × 3`。
 
 ## 委派机制
 
@@ -203,7 +205,7 @@ value: {baseline_value}
 1. DONE
 2. ESCALATE（含 scope_drift FAIL）
 3. HOLD
-4. STALL
+4. STALL（`stall_counter >= STALL_MAX`，默认 2，连续 2 轮任务状态签名无变化）
 5. MAX_CYCLES（=8，超过 8 轮仍未 DONE）
 6. STOPPED
 

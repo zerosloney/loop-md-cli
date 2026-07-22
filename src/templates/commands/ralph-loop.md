@@ -30,6 +30,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
     }
   ],
   "consecutive_failures": 0,
+  "stall_counter": 0,
   "fail_history": [
     { "task_id": "t1", "round": 1, "reason": "<失败原因>" }
   ],
@@ -42,6 +43,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
 - 每轮结束时写入，先写 `.loop-cli/state/{{name}}.json.tmp`，再重命名为 `.loop-cli/state/{{name}}.json`（防止写入中断导致文件损坏）。
 - `stop_reason` 枚举值：`null`（运行中）| `"DONE"` | `"ESCALATE"` | `"HOLD"` | `"STALL"` | `"MAX_CYCLES"` | `"STOPPED"`。
 - `fail_history` 保留最近 10 条，超出时丢弃最旧的。
+- 每轮结束时计算"任务状态签名"（所有任务按 id 升序拼成的 `id:status` 有序串）：与上一轮**完全相同** → `stall_counter += 1`；有任一变化 → `stall_counter = 0`。
 
 ### 读取规则
 1. 解析 JSON，校验 `version === 1` 且所有必填字段存在。
@@ -64,8 +66,8 @@ DONE 必须同时满足：
 1. 读取当前请求；为空则询问用户。
 2. 若状态文件存在，按 `### 读取规则` 处理恢复或新建；新建时删除旧文件。
 3. 把请求拆解为 TaskList，每项严格按 JSON schema 的 `tasks[]` 格式。**检查 `depends_on` 是否存在循环依赖**（如 A→B→C→A），存在则报错并要求用户修正。
-4. 初始化 `consecutive_failures = 0`、`round = 0`、`stop_reason = null`。
-5. 设置 `MAX_CYCLES = 10`（超过此轮次仍未 DONE 则强制停止）。每轮约消耗 2-3 个 agentic step（DELEGATE + WAIT_REVIEW + JUDGE），确保 frontmatter 的 `steps >= MAX_CYCLES × 3`。
+4. 初始化 `consecutive_failures = 0`、`stall_counter = 0`、`round = 0`、`stop_reason = null`。
+5. 设置 `MAX_CYCLES = 10`（超过此轮次仍未 DONE 则强制停止）与 `STALL_MAX = 3`（连续 3 轮任务状态签名无变化则判 STALL）。二者均为初始化硬上限，不被 `fail_history` 或 `round` 覆盖。每轮约消耗 2-3 个 agentic step（DELEGATE + WAIT_REVIEW + JUDGE），确保 frontmatter 的 `steps >= MAX_CYCLES × 3`。
 6. 确定背压验证命令（默认沿用领域 backpressure 配置）。
 
 ## 委派机制
@@ -79,13 +81,13 @@ DONE 必须同时满足：
 1. **ralph-worker** — 执行者，负责在 scope 内完成任务、运行验证
    - 参数：
      - `description`: 简短任务描述（3-5个词）
-     - `query`: 详细任务描述，包含当前任务、声明边界、验证命令等
+     - `query`: 详细任务描述，包含当前任务、accept_criteria、已知上下文、验证命令等
      - `response_language`: "zh"
 
 2. **ralph-reviewer** — 审查者，负责只读审查、输出 verdict/issues
    - 参数：
      - `description`: 简短审查描述（3-5个词）
-     - `query`: 详细审查要求，包含本轮产出、声明边界、基线、执行者检查结果等
+     - `query`: 详细审查要求，包含当前任务、accept_criteria、本轮变更、执行者产出等
      - `response_language`: "zh"
 
 ### 决策流程
@@ -106,46 +108,47 @@ DONE 必须同时满足：
 
 调用子代理时，必须注入完整的上下文信息：
 
-#### 给 ralph-worker 的上下文：
+#### 给 ralph-worker 的上下文（对齐 ralph-executor 输入契约）：
 ```text
+=== 目标 ===
+{goal}
+
 === 当前任务 ===
-{task}
+id: {task_id}
+title: {task_title}
+accept_criteria:
+{accept_criteria}
 
-=== 声明边界 ===
-hard_scope:
-{hard_scope}
-soft_scope:
-{soft_scope}
-forbidden_scope:
-{forbidden_scope}
-
-=== Baseline ===
-type: {baseline_type}
-value: {baseline_value}
+=== 已知上下文 ===
+相关文件、约束、前置任务产出：
+{known_context}
 
 === 验证命令 ===
 {verify_cmd}
+
+=== 执行轮次 ===
+{round}
 ```
 
-#### 给 ralph-reviewer 的上下文：
+#### 给 ralph-reviewer 的上下文（对齐 ralph-reviewer 输入契约）：
 ```text
-=== 本轮产出 ===
-{output}
+=== 目标 ===
+{goal}
 
-=== 声明边界 ===
-hard_scope:
-{hard_scope}
-soft_scope:
-{soft_scope}
-forbidden_scope:
-{forbidden_scope}
+=== 当前任务 ===
+id: {task_id}
+title: {task_title}
+accept_criteria:
+{accept_criteria}
 
-=== Baseline ===
-type: {baseline_type}
-value: {baseline_value}
-
-=== 执行者检查结果 ===
+=== 执行者产出 ===
 {worker_result}
+
+=== 本轮变更 ===
+{diff_or_files}
+
+=== 审查轮次 ===
+{round}
 ```
 
 ## 执行路径
@@ -172,7 +175,7 @@ value: {baseline_value}
 1. DONE
 2. ESCALATE（熔断触发或不可恢复 critical）
 3. HOLD（仅剩 blocked 任务，需用户决策）
-4. STALL（连续无状态变化）
+4. STALL（`stall_counter >= STALL_MAX`，默认 3，连续 3 轮任务状态签名无变化）
 5. MAX_CYCLES（=10，超过 10 轮仍未 DONE）
 6. STOPPED
 

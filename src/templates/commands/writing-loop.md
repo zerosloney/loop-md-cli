@@ -31,6 +31,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
     }
   ],
   "consecutive_failures": 0,
+  "stall_counter": 0,
   "fail_history": [
     { "task_id": "t1", "round": 1, "reason": "<失败原因>" }
   ],
@@ -43,6 +44,7 @@ JSON 格式（严格按此 schema，version 字段用于检测格式漂移）：
 - 每轮结束时写入，先写 `.loop-cli/state/{{name}}.json.tmp`，再重命名为 `.loop-cli/state/{{name}}.json`（防止写入中断导致文件损坏）。
 - `stop_reason` 枚举值：`null`（运行中）| `"DONE"` | `"ESCALATE"` | `"HOLD"` | `"STALL"` | `"MAX_CYCLES"` | `"STOPPED"`。
 - `fail_history` 保留最近 10 条，超出时丢弃最旧的。
+- 每轮结束时计算"任务状态签名"（所有任务按 id 升序拼成的 `id:status` 有序串）：与上一轮**完全相同** → `stall_counter += 1`；有任一变化 → `stall_counter = 0`。
 ### 读取规则
 1. 解析 JSON，校验 `version === 1` 且所有必填字段存在。
 2. 若格式不合法 → 询问"状态文件损坏，是否新建？"
@@ -72,8 +74,8 @@ DONE 必须同时满足：
 4. **建立写作边界清单**：识别文档目录（hard_scope，如 docs/、README*.md）+ 禁碰路径（forbidden_scope，如 src/、config/、CI）。
 5. **加载术语表**：从 `.opencode/terms.json` 或 `docs/glossary.md` 读取 `[term, preferred_form, definition]`。
 6. 探测项目脚本（lint，如 markdownlint / vale）。
-7. 初始化 `consecutive_failures = 0`、`round = 0`、`stop_reason = null`。
-8. 设置 `MAX_CYCLES = 6`（超过此轮次仍未 DONE 则强制停止，writing 容错性高）。每轮约消耗 2-3 个 agentic step，确保 `steps >= MAX_CYCLES × 3`。
+7. 初始化 `consecutive_failures = 0`、`stall_counter = 0`、`round = 0`、`stop_reason = null`。
+8. 设置 `MAX_CYCLES = 6`（超过此轮次仍未 DONE 则强制停止，writing 容错性高）与 `STALL_MAX = 2`（连续 2 轮任务状态签名无变化则判 STALL）。二者均为初始化硬上限，不被 `fail_history` 或 `round` 覆盖。每轮约消耗 2-3 个 agentic step，确保 `steps >= MAX_CYCLES × 3`。
 
 
 ## 委派机制
@@ -178,7 +180,7 @@ code_example_errors: == 0
 1. DONE
 2. ESCALATE（熔断触发 / 写作边界违反 / 不可恢复 critical）
 3. HOLD（仅剩 blocked 任务，需用户决策）
-4. STALL（连续无状态变化）
+4. STALL（`stall_counter >= STALL_MAX`，默认 2，连续 2 轮任务状态签名无变化）
 5. MAX_CYCLES（=6，超过 6 轮仍未 DONE）
 6. STOPPED
 

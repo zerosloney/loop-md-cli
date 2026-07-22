@@ -573,6 +573,13 @@ describe("generatePlatform integration", () => {
       content.includes("max_failures"),
       "ralph-loop should reference max_failures threshold",
     );
+    // 回归：ralph 命令产物不得混入 coding 领域的 scope/baseline 模型（契约漂移防护）
+    assert.ok(!content.includes("hard_scope"), "ralph-loop should NOT use coding scope model");
+    assert.ok(!content.includes("声明边界"), "ralph-loop should NOT use coding boundary model");
+    assert.ok(!content.includes("Baseline"), "ralph-loop should NOT use coding baseline model");
+    // STALL 量化：状态 schema 必须带 stall_counter 与 STALL_MAX
+    assert.ok(content.includes("stall_counter"), "ralph-loop should track stall_counter");
+    assert.ok(content.includes("STALL_MAX"), "ralph-loop should define STALL_MAX threshold");
   });
 
   it("ralph orchestrator places backpressure prominently (before input section)", () => {

@@ -84,7 +84,7 @@ allowed_scope: <测试目录路径列表>
 每轮：
 - 从 `=== 状态文件路径 ===` 读取状态文件。
 - 按 `### 读取规则` 校验格式合法性。
-- 恢复 TaskList、consecutive_failures、fail_history、round。
+- 恢复 TaskList、consecutive_failures、stall_counter、fail_history、round。
 - 每轮结束时按 JSON schema 写入（遵循原子写入流程）。
 - 停止时设置 `stop_reason`。
 
@@ -132,7 +132,7 @@ allowed_scope: <测试目录路径列表>
 1. **DONE**：TaskList 全部 `done` 且最后一次三项验证信号全部达标。
 2. **ESCALATE**：连续失败达到 `max_failures`、源码冻结被违反、或审查者给出不可恢复的 critical。
 3. **HOLD**：所有可执行任务完成，但仍有 `blocked` 项需要用户决策。
-4. **STALL**：连续多轮无任务状态变化。
+4. **STALL**：`stall_counter` 达到 `STALL_MAX`（=2）——连续 2 轮任务状态签名（所有任务 `id:status` 有序串）无变化。
 5. **MAX_CYCLES (=8)**：达到 8 轮上限仍未 DONE。初始化时设置的硬上限，不被 `fail_history` 或 `round` 覆盖。
 6. **STOPPED**：用户要求停止。
 

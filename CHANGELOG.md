@@ -6,7 +6,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-自 v0.4.1 以来的改动（尚未发版）。
+## [0.5.0] - 2026-07-22
+
+自 v0.4.1 以来的改动。
 
 ### Added
 
@@ -16,12 +18,15 @@ All notable changes to this project are documented here.
 - 工程化：引入 ESLint（flat config）+ Prettier、c8 覆盖率（`npm run test:coverage`）、`prepublishOnly` 构建守卫。
 - 测试：补充 watch 文件变更触发回归、CLI 进程级集成测试（`--dry-run`/`--validate`/`--domain`/`--archive`）、manifest 版本迁移回归、full-mode 孤儿清理回归。
 - 文档：英文 README（`README.md`）+ 中文 README（`README.zh-CN.md`）互链、README 输出示例、`CHANGELOG.md`、`docs/architecture.md`、`docs/README.md` 索引、`CONTRIBUTING.md`。
+- Loop 状态 schema 新增 `stall_counter` 字段与 `STALL_MAX` 阈值（ralph=3，coding/testing/writing=2）；STALL 停止条件由“连续多轮无变化”改为可判定的 `stall_counter >= STALL_MAX`（按任务状态签名逐轮比对），覆盖全部四个领域。
+- 测试：新增 ralph-loop 命令产物回归断言（禁止混入 coding scope/baseline 模型，且必须含 stall_counter/STALL_MAX）。
 
 ### Changed
 
 - `generatePlatform` 由 8 个位置参数重构为单一 `GenerateOptions` 对象。
 - 重抛错误统一附带 `{ cause }`，保留原始堆栈。
 - `FileChange` 携带已计算的 hash，`applyChanges` 复用，避免重复 SHA-256 计算。
+- ralph 内核 `ralph-loop` 命令模板的注入上下文下沉对齐到 ralph agent 输入契约（`accept_criteria` / `已知上下文` / `本轮变更`），移除误入的 coding 领域 `hard_scope` / `声明边界` / `Baseline`，消除命令层与 agent 层的契约漂移。
 
 ### Fixed
 
