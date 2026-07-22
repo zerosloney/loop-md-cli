@@ -3,14 +3,14 @@
  *
  * 领域 schema 体现三层概念：
  *
- *   engine        — 领域采用的工程范式（当前仅支持 loop = 循环工程设计）
+ *   engine        — 领域采用的工程范式（loop = 循环工程设计，graph = 图路由工程设计）
  *   agents        — 三角色 worker（orchestrator / executor / reviewer）
  *   commands      — engine 的入口触发器（kind="entry"），每个 command 必填 agent 字段
  *                   显式声明驱动哪个 worker（告别按 -loop 后缀硬拆）
  *
  * 校验规则：
  *   - id: 非空字符串
- *   - engine.type: 必填，必须是 "loop"
+ *   - engine.type: 必填，必须是 "loop" 或 "graph"
  *   - agents[].role: 必须是已知 agent 角色（orchestrator/executor/reviewer）
  *   - agents[].name, description: 非空字符串
  *   - commands[].kind: 必填，必须是 "entry"
@@ -31,16 +31,27 @@ export interface BackpressureConfig {
   retry_on_failure?: boolean;
 }
 
-/** 领域采用的工程范式。当前仅支持 loop = 循环工程设计。 */
+/** 领域采用的工程范式。loop = 循环工程设计，graph = 图路由工程设计。 */
 export interface EngineConfig {
-  type: "loop";
+  type: "loop" | "graph";
 }
+
+/** 图模式下定义的任务节点。 */
+export interface TaskDefinition {
+  id: string;
+  title: string;
+  depends_on?: string[];
+  accept_criteria?: string[];
+}
+
+
 
 export interface ResolvedDomain {
   id: string;
   engine: EngineConfig;
   agents: { role: string; name: string; description: string; model?: string }[];
   commands: { kind: string; agent: string; name: string; description: string }[];
+  tasks?: TaskDefinition[];
   backpressure?: BackpressureConfig;
 }
 
@@ -66,17 +77,20 @@ export function validateDomainFields(domain: unknown): FieldError[] {
   }
 
   // ── engine（必填，领域工程范式） ──
+  let engineType: string | undefined;
   if (obj.engine === undefined) {
     errors.push({ field: "engine", message: "必填，领域采用的工程范式" });
   } else if (typeof obj.engine !== "object" || obj.engine === null || Array.isArray(obj.engine)) {
     errors.push({ field: "engine", message: "必须是对象" });
   } else {
     const engine = obj.engine as Record<string, unknown>;
-    if (typeof engine.type !== "string" || !ENGINE_TYPES.includes(engine.type as "loop")) {
+    if (typeof engine.type !== "string" || !ENGINE_TYPES.includes(engine.type as "loop" | "graph")) {
       errors.push({
         field: "engine.type",
         message: `必填，必须是 ${ENGINE_TYPES.join(" | ")}`,
       });
+    } else {
+      engineType = engine.type;
     }
   }
 
@@ -222,6 +236,101 @@ export function validateDomainFields(domain: unknown): FieldError[] {
     }
   }
 
+  // ── tasks（图模式下必填，定义 DAG 节点） ──
+  const taskIds = new Set<string>();
+  if (engineType === "graph" && obj.tasks === undefined) {
+    errors.push({ field: "tasks", message: "engine.type=graph 时必填，定义 DAG 任务节点" });
+  } else if (obj.tasks !== undefined) {
+    if (!Array.isArray(obj.tasks)) {
+      errors.push({ field: "tasks", message: "必须是数组" });
+    } else if (obj.tasks.length === 0) {
+      errors.push({ field: "tasks", message: "至少需要 1 个任务" });
+    } else {
+      for (let i = 0; i < obj.tasks.length; i++) {
+        const task = obj.tasks[i];
+        const prefix = `tasks[${i}]`;
+        if (typeof task !== "object" || task === null) {
+          errors.push({ field: prefix, message: "必须是对象" });
+          continue;
+        }
+        const t = task as Record<string, unknown>;
+        if (typeof t.id !== "string" || t.id.trim() === "") {
+          errors.push({ field: `${prefix}.id`, message: "必须是非空字符串" });
+        } else if (taskIds.has(t.id)) {
+          errors.push({ field: `${prefix}.id`, message: `任务 ID "${t.id}" 重复` });
+        } else {
+          taskIds.add(t.id);
+        }
+        if (typeof t.title !== "string" || t.title.trim() === "") {
+          errors.push({ field: `${prefix}.title`, message: "必须是非空字符串" });
+        }
+        if (t.depends_on !== undefined) {
+          if (!Array.isArray(t.depends_on)) {
+            errors.push({ field: `${prefix}.depends_on`, message: "必须是数组" });
+          } else {
+            for (let j = 0; j < t.depends_on.length; j++) {
+              if (typeof t.depends_on[j] !== "string" || t.depends_on[j].trim() === "") {
+                errors.push({
+                  field: `${prefix}.depends_on[${j}]`,
+                  message: "必须是有效的任务 ID 字符串",
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── 环路检测：tasks 存在且 ID 收集完成时，检查 depends_on 引用和环路 ──
+  if (obj.tasks !== undefined && Array.isArray(obj.tasks) && taskIds.size > 0) {
+    // 第二遍：检查 depends_on 引用是否存在
+    let hasRefError = false;
+    for (let i = 0; i < (obj.tasks as unknown[]).length; i++) {
+      const task = (obj.tasks as unknown[])[i] as Record<string, unknown>;
+      const deps = task.depends_on as string[] | undefined;
+      if (!deps) continue;
+      for (let j = 0; j < deps.length; j++) {
+        if (!taskIds.has(deps[j])) {
+          errors.push({
+            field: `tasks[${i}].depends_on[${j}]`,
+            message: `"${deps[j]}" 不是有效的任务 ID`,
+          });
+          hasRefError = true;
+        }
+      }
+    }
+    // 仅当引用全部有效时运行 DFS 环路检测
+    if (!hasRefError) {
+      const adj = new Map<string, string[]>();
+      for (const raw of obj.tasks as unknown[]) {
+        const t = raw as Record<string, unknown>;
+        adj.set(t.id as string, (t.depends_on as string[]) ?? []);
+      }
+      const WHITE = 0, GRAY = 1, BLACK = 2;
+      const color = new Map<string, number>();
+      for (const id of taskIds) color.set(id, WHITE);
+      let hasCycle = false;
+      function dfs(node: string): void {
+        color.set(node, GRAY);
+        for (const dep of adj.get(node) ?? []) {
+          const c = color.get(dep);
+          if (c === GRAY) { hasCycle = true; return; }
+          if (c === WHITE) dfs(dep);
+          if (hasCycle) return;
+        }
+        color.set(node, BLACK);
+      }
+      for (const id of taskIds) {
+        if (color.get(id) === WHITE) dfs(id);
+        if (hasCycle) break;
+      }
+      if (hasCycle) {
+        errors.push({ field: "tasks", message: "检测到循环依赖：tasks 中的 depends_on 存在环路" });
+      }
+    }
+  }
+
   return errors;
 }
 
@@ -252,7 +361,7 @@ export function readDomainFile(path: string): ResolvedDomain {
   const engineObj = obj.engine as Record<string, unknown>;
   const domain: ResolvedDomain = {
     id: obj.id as string,
-    engine: { type: engineObj.type as "loop" },
+    engine: { type: engineObj.type as "loop" | "graph" },
     agents: (obj.agents as unknown[]).map((a) => {
       const agent = a as Record<string, unknown>;
       return {
@@ -285,6 +394,20 @@ export function readDomainFile(path: string): ResolvedDomain {
       max_failures: bp.max_failures as number,
       retry_on_failure: bp.retry_on_failure as boolean | undefined,
     };
+  }
+
+  if (Array.isArray(obj.tasks)) {
+    domain.tasks = (obj.tasks as unknown[]).map((t) => {
+      const task = t as Record<string, unknown>;
+      return {
+        id: task.id as string,
+        title: task.title as string,
+        depends_on: Array.isArray(task.depends_on) ? (task.depends_on as string[]) : undefined,
+        accept_criteria: Array.isArray(task.accept_criteria)
+          ? (task.accept_criteria as string[])
+          : undefined,
+      };
+    });
   }
 
   return domain;

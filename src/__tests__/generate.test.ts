@@ -735,4 +735,53 @@ describe("generatePlatform integration", () => {
       "ralph-* orphans pruned, coding-* present, user file untouched",
     );
   });
+
+  // ─── Graph: engine.type=graph 生成 ralph-graph 命令 + 路由表 ───
+
+  it("graph domain generates ralph-graph command with routing table", () => {
+    const domainDir = join(tmpDir, ".opencode", "domains");
+    mkdirSync(domainDir, { recursive: true });
+    const domainFile = join(domainDir, "graph-domain.json");
+    writeFileSync(
+      domainFile,
+      JSON.stringify({
+        id: "my-graph",
+        engine: { type: "graph" },
+        agents: [
+          { role: "orchestrator", name: "graph-orchestrator", description: "Graph orchestrator" },
+          { role: "executor", name: "graph-worker", description: "Graph worker" },
+          { role: "reviewer", name: "graph-reviewer", description: "Graph reviewer" },
+        ],
+        commands: [
+          {
+            kind: "entry",
+            agent: "graph-orchestrator",
+            name: "my-graph",
+            description: "Graph command",
+          },
+        ],
+        tasks: [
+          { id: "t1", title: "Task 1", depends_on: [] },
+          { id: "t2", title: "Task 2", depends_on: ["t1"] },
+          { id: "t3", title: "Task 3", depends_on: ["t1"] },
+          { id: "t4", title: "Task 4", depends_on: ["t2", "t3"] },
+        ],
+      }),
+    );
+    const result = generatePlatform("claude", { domain: "my-graph", domainFiles: [domainFile] });
+    assert.equal(result.commands, 1, "should generate exactly 1 command");
+    const commandDir = join(tmpDir, ".claude", "commands");
+    const commandFiles = listFiles(commandDir);
+    assert.ok(commandFiles.includes("my-graph.md"), "should generate my-graph.md command");
+    const content = readFileSync(join(commandDir, "my-graph.md"), "utf-8");
+    // Should use ralph-graph template (backward compatible naming)
+    assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
+    assert.ok(content.includes("路由表"), "should contain routing table section");
+    assert.ok(content.includes(`"entry_points"`), "should contain entry_points in routing table");
+    assert.ok(
+      content.includes(`"topological_order"`),
+      "should contain topological_order in routing table",
+    );
+    assert.ok(content.includes("active_set"), "should contain active_set in state schema");
+  });
 });

@@ -72,7 +72,7 @@ myplatform: { id: "myplatform", dir: ".myplatform", family: "named", note: "My P
 
 ## 新增领域
 
-1. 在 `src/domains.ts` 的 `DOMAINS` 加一条（`engine.type` 必须为 `loop`，每个 command 显式声明 `agent`），或通过 `.opencode/domains/<id>.json` / `--domain-file` 提供自定义领域。
+1. 在 `src/domains.ts` 的 `DOMAINS` 加一条（`engine.type` 为 `loop` 或 `graph`；`graph` 时须定义 `tasks` DAG 拓扑；每个 command 显式声明 `agent`），或通过 `.opencode/domains/<id>.json` / `--domain-file` 提供自定义领域。
 2. 如需领域专属纪律，在 `src/templates/agents/` 与 `src/templates/commands/` 加 `<id>-<role>.md` / `<id>-loop.md`；不加则自动回退 `ralph-*` 内核范式。
 3. 补 `domain-schema.test.ts` / `generate.test.ts` 相应断言。
 

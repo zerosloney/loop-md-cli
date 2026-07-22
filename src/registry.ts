@@ -25,8 +25,8 @@
 /** Agent 三角色的合法取值。 */
 export const AGENT_ROLES = ["orchestrator", "executor", "reviewer"];
 
-/** 领域工程范式（engine.type）的合法取值。当前仅支持 loop = 循环工程设计。 */
-export const ENGINE_TYPES: string[] = ["loop"];
+/** 领域工程范式（engine.type）的合法取值。loop = 循环工程设计，graph = 图路由工程设计。 */
+export const ENGINE_TYPES: string[] = ["loop", "graph"];
 
 /** Command kind 的合法取值。entry = engine 入口触发器。 */
 export const COMMAND_KINDS: string[] = ["entry"];

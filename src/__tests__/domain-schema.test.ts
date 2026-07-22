@@ -1,9 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync, mkdirSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync } from "node:fs";
 
 import { validateDomainFields } from "../domain-schema.js";
 import { readDomainFile } from "../domain-schema.js";
@@ -494,5 +493,202 @@ describe("domain-schema validation", () => {
         errors.find((e) => e.field === "commands")?.message?.includes("数组"),
       "should report commands type error",
     );
+  });
+
+  // ── graph engine type ──
+
+  it("accepts engine.type=graph", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+    });
+    const engineErrors = errors.filter((e) => e.field === "engine.type");
+    assert.equal(engineErrors.length, 0);
+  });
+
+  it("rejects engine.type=graph when tasks is missing", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+    });
+    assert.ok(errors.some((e) => e.field === "tasks" && e.message.includes("graph 时必填")));
+  });
+
+  it("accepts engine.type=graph with valid tasks", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [
+        { id: "t1", title: "Task 1", depends_on: [] },
+        { id: "t2", title: "Task 2", depends_on: ["t1"] },
+      ],
+    });
+    assert.equal(
+      errors.filter((e) => !e.field.startsWith(".")).length,
+      0,
+      `unexpected errors: ${JSON.stringify(errors)}`,
+    );
+  });
+
+  it("rejects empty tasks array", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [],
+    });
+    assert.ok(
+      errors.some((e) => e.field === "tasks" && e.message.includes("至少需要 1 个任务")),
+    );
+  });
+
+  it("rejects task with empty id", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [{ id: "", title: "No ID", depends_on: [] }],
+    });
+    assert.ok(errors.some((e) => e.field === "tasks[0].id" && e.message.includes("非空字符串")));
+  });
+
+  it("rejects task with empty title", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [{ id: "t1", title: "", depends_on: [] }],
+    });
+    assert.ok(
+      errors.some((e) => e.field === "tasks[0].title" && e.message.includes("非空字符串")),
+    );
+  });
+
+  it("rejects duplicate task IDs", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [
+        { id: "t1", title: "Task 1", depends_on: [] },
+        { id: "t1", title: "Task 1 again", depends_on: [] },
+      ],
+    });
+    assert.ok(errors.some((e) => e.field === "tasks[1].id" && e.message.includes("重复")));
+  });
+
+  it("rejects depends_on reference to non-existent task ID", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [
+        { id: "t1", title: "Task 1", depends_on: [] },
+        { id: "t2", title: "Task 2", depends_on: ["t1", "nonexistent"] },
+      ],
+    });
+    assert.ok(
+      errors.some(
+        (e) => e.field === "tasks[1].depends_on[1]" && e.message.includes("不是有效的任务 ID"),
+      ),
+    );
+  });
+
+  it("rejects circular dependency", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [
+        { id: "t1", title: "Task 1", depends_on: ["t3"] },
+        { id: "t2", title: "Task 2", depends_on: ["t1"] },
+        { id: "t3", title: "Task 3", depends_on: ["t2"] },
+      ],
+    });
+    assert.ok(errors.some((e) => e.field === "tasks" && e.message.includes("循环依赖")));
+  });
+
+  it("accepts non-circular DAG (T1 → T2 & T3 → T4)", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [
+        { id: "t1", title: "Task 1", depends_on: [] },
+        { id: "t2", title: "Task 2", depends_on: ["t1"] },
+        { id: "t3", title: "Task 3", depends_on: ["t1"] },
+        { id: "t4", title: "Task 4", depends_on: ["t2", "t3"] },
+      ],
+    });
+    assert.equal(
+      errors.filter((e) => !e.field.startsWith(".")).length,
+      0,
+      `unexpected errors: ${JSON.stringify(errors)}`,
+    );
+  });
+
+  // ── readDomainFile with graph ──
+
+  it("readDomainFile parses graph domain correctly", () => {
+    const dir = join(tmpdir(), "loop-md-graph-test");
+    mkdirSync(dir, { recursive: true });
+    const domainPath = join(dir, "graph-domain.json");
+    writeFileSync(
+      domainPath,
+      JSON.stringify({
+        id: "my-graph",
+        engine: { type: "graph" },
+        agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+        commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+        tasks: [
+          { id: "t1", title: "Task 1", depends_on: [], accept_criteria: ["must work"] },
+          { id: "t2", title: "Task 2", depends_on: ["t1"] },
+        ],
+      }),
+    );
+    const domain = readDomainFile(domainPath);
+    assert.equal(domain.engine.type, "graph");
+    assert.ok(domain.tasks !== undefined);
+    assert.equal(domain.tasks!.length, 2);
+    assert.equal(domain.tasks![0].id, "t1");
+    assert.deepEqual(domain.tasks![0].depends_on, []);
+    assert.deepEqual(domain.tasks![0].accept_criteria, ["must work"]);
+    assert.equal(domain.tasks![1].id, "t2");
+    assert.deepEqual(domain.tasks![1].depends_on, ["t1"]);
+    // cleanup
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("readDomainFile handles domain without tasks (loop mode)", () => {
+    const dir = join(tmpdir(), "loop-md-no-tasks-test");
+    mkdirSync(dir, { recursive: true });
+    const domainPath = join(dir, "loop-domain.json");
+    writeFileSync(
+      domainPath,
+      JSON.stringify({
+        id: "my-loop",
+        engine: { type: "loop" },
+        agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+        commands: [{ kind: "entry", agent: "orchestrator", name: "my-loop", description: "cmd" }],
+      }),
+    );
+    const domain = readDomainFile(domainPath);
+    assert.equal(domain.engine.type, "loop");
+    assert.equal(domain.tasks, undefined);
+    // cleanup
+    rmSync(dir, { recursive: true, force: true });
   });
 });

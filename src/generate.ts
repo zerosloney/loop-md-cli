@@ -35,7 +35,7 @@ import {
   applyChanges,
   computeHash,
 } from "./incremental.js";
-import type { BackpressureConfig, ResolvedDomain } from "./domain-schema.js";
+import type { BackpressureConfig, ResolvedDomain, TaskDefinition } from "./domain-schema.js";
 
 const DEFAULT_TEMPLATES_ROOT = ".opencode/templates";
 
@@ -253,6 +253,54 @@ function pickCommandTemplate(
   return undefined;
 }
 
+/**
+ * 构建图模式的 DAG 路由表 JSON 字符串。
+ * 根据 tasks 定义计算 entry_points、topological_order（Kahn 算法）和节点映射。
+ */
+function buildRoutingTable(tasks: TaskDefinition[]): string {
+  // 拓扑排序（Kahn 算法）
+  const adj = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+  for (const t of tasks) {
+    adj.set(t.id, []);
+    inDegree.set(t.id, 0);
+  }
+  for (const t of tasks) {
+    for (const dep of t.depends_on ?? []) {
+      const deps = adj.get(dep);
+      if (deps) deps.push(t.id);
+      inDegree.set(t.id, (inDegree.get(t.id) || 0) + 1);
+    }
+  }
+  const queue: string[] = [];
+  for (const [id, deg] of inDegree) {
+    if (deg === 0) queue.push(id);
+  }
+  const topologicalOrder: string[] = [];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    topologicalOrder.push(node);
+    for (const next of adj.get(node) ?? []) {
+      const newDeg = (inDegree.get(next) || 1) - 1;
+      inDegree.set(next, newDeg);
+      if (newDeg === 0) queue.push(next);
+    }
+  }
+
+  const entryPoints = tasks.filter((t) => !t.depends_on || t.depends_on.length === 0).map((t) => t.id);
+
+  const nodes: Record<string, { title: string; depends_on: string[]; accept_criteria: string[] }> = {};
+  for (const t of tasks) {
+    nodes[t.id] = {
+      title: t.title,
+      depends_on: t.depends_on ?? [],
+      accept_criteria: t.accept_criteria ?? [],
+    };
+  }
+
+  return JSON.stringify({ nodes, entry_points: entryPoints, topological_order: topologicalOrder }, null, 2);
+}
+
 // ── 生成编排 ──
 
 /** generatePlatform 的可选配置。全部字段可选，缺省值与历史行为一致。 */
@@ -358,6 +406,9 @@ export function generatePlatform(
     }
     const cmdVars: Record<string, string> = { name: key, description, agent };
     cmdVars.domain = resolvedDomain.id;
+    if (engineType === "graph" && resolvedDomain.tasks) {
+      cmdVars.routing_table = buildRoutingTable(resolvedDomain.tasks);
+    }
     const rendered = renderTemplate(tpl, cmdVars);
     const { frontmatter, body } = parseSource(rendered);
     const src: CommandSource = { name: key, description, frontmatter, body };
