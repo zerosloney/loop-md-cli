@@ -108,6 +108,7 @@ export function renderAgentWithTemplates(
   domainId?: string,
   backpressureText = "",
   model?: string,
+  engineType?: string,
 ): RenderedAgent {
   const tpl = pickTemplate(agentTemplates, domainId, role);
   if (!tpl) throw new Error(`未找到角色模板: ${role}`);
@@ -117,6 +118,9 @@ export function renderAgentWithTemplates(
     backpressure: backpressureText,
   };
   if (domainId) vars.domain = domainId;
+  // engine_type 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
+  // 默认 loop（与 ENGINE_TYPES[0] 一致），覆盖 renderAgent 公开 API 无 domain 上下文的场景。
+  vars.engine_type = engineType ?? ENGINE_TYPES[0];
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
   const src: AgentSource = { name: agentName, description, frontmatter, body, role, model };

@@ -126,6 +126,7 @@ export function validatePlatform(
         renderDomainId,
         agentBp,
         a.model,
+        resolvedDomain.engine.type,
       ),
     );
   }

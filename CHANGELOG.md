@@ -22,6 +22,7 @@ All notable changes to this project are documented here.
 ### Fixed
 
 - 模板回退静默覆盖：`pickTemplate` / `pickCommandTemplate` 在领域专属模板缺失、回退到 `ralph-*` 内核范式时打印 `console.warn`（含期望文件名），便于用户定位文件名拼写错误。
+- `--validate` 误报 stale：`renderAgentWithTemplates`（validate 复用的渲染管线）构造模板变量时漏传 `engine_type`，导致含 `{{engine_type}}` 的 agent 模板（如 `ralph-orchestrator.md`）在预期产物中未渲染，与磁盘上已渲染的文件不一致。补 `engineType` 参数，validate 传 `resolvedDomain.engine.type`，`renderAgent` 公开 API 默认 `loop`。
 
 ## [0.5.0] - 2026-07-22
 
