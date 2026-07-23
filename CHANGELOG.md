@@ -6,6 +6,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-24
+
+自 v0.6.0 以来的改动：消除内置 graph 领域的回退警告噪音。
+
+### Fixed
+
+- 内置 `graph` 领域生成时打印 4 条 `领域模板 ... 未找到，回退到 ralph-*` 警告。graph 领域刻意复用 ralph 内核模板（orchestrator 用 `{{engine_type}}` 区分，executor/reviewer 直接共享），回退是预期行为。`pickTemplate` / `pickCommandTemplate` 对内置领域（`domainId in DOMAINS`）不再告警，仅自定义领域保留警告以抓文件名拼写错误。
+
 ## [0.6.0] - 2026-07-23
 
 自 v0.5.1 以来的改动：新增内置 `graph` 领域，`--domain graph` 开箱即用生成 DAG 路由命令。
@@ -131,7 +139,8 @@ All notable changes to this project are documented here.
 
 - 初始发布（loop-forge）：多平台 AI agent/command 配置生成器。
 
-[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/master0071/loop-md-cli/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/master0071/loop-md-cli/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/master0071/loop-md-cli/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/master0071/loop-md-cli/compare/v0.4.1...v0.5.0

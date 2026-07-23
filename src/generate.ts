@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import { PLATFORMS, type Family, type Platform } from "./platforms.js";
 import { ENGINE_TYPES, DEFAULT_DOMAIN_ID } from "./registry.js";
+import { DOMAINS } from "./domains.js";
 import {
   loadAgentTemplates,
   loadCommandTemplates,
@@ -239,8 +240,9 @@ function pickTemplate(
     const specific = templates[`${domainId}-${role}`];
     if (specific) return specific;
   }
-  // 回退到 ralph-*（最通用的内核范式）。领域模板缺失通常是文件名拼写错误，给出可见警告便于定位。
-  if (domainId) {
+  // 回退到 ralph-*（最通用的内核范式）。内置领域（如 graph）刻意复用 ralph 模板，回退是预期行为不告警；
+  // 自定义领域回退通常是文件名拼写错误，给出可见警告便于定位。
+  if (domainId && !(domainId in DOMAINS)) {
     console.warn(
       `[loop-md] 领域模板 ${domainId}-${role} 未找到，回退到 ralph-${role} 内核范式`,
     );
@@ -262,8 +264,9 @@ function pickCommandTemplate(
     const specific = templates[`${domainId}-${engineType}`];
     if (specific) return specific;
   }
-  // 回退到 ralph-<engineType>（最通用的内核范式）。领域模板缺失通常是文件名拼写错误，给出可见警告便于定位。
-  if (domainId) {
+  // 回退到 ralph-<engineType>（最通用的内核范式）。内置领域（如 graph）刻意复用 ralph 模板，回退是预期行为不告警；
+  // 自定义领域回退通常是文件名拼写错误，给出可见警告便于定位。
+  if (domainId && !(domainId in DOMAINS)) {
     console.warn(
       `[loop-md] 领域模板 ${domainId}-${engineType} 未找到，回退到 ralph-${engineType} 内核范式`,
     );

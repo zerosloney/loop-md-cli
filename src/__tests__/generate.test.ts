@@ -801,6 +801,24 @@ describe("generatePlatform integration", () => {
       "should reference ralph-worker for delegation (shared with ralph kernel)",
     );
   });
+
+  it("builtin domains do not emit fallback warnings (expected reuse)", () => {
+    // 内置 graph 领域刻意复用 ralph 模板，回退是预期行为，不应产生噪音警告。
+    const warns: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => warns.push(String(args[0]));
+    try {
+      generatePlatform("claude", { domain: "graph" });
+    } finally {
+      console.warn = originalWarn;
+    }
+    const fallbackWarns = warns.filter((w) => w.includes("回退到 ralph"));
+    assert.equal(
+      fallbackWarns.length,
+      0,
+      `builtin graph domain should not emit fallback warnings, got: ${JSON.stringify(fallbackWarns)}`,
+    );
+  });
 });
 
 // ─── buildRoutingTable 单测 ───
