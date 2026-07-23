@@ -36,8 +36,11 @@ All notable changes to this project are documented here.
 - 工程化：引入 ESLint（flat config）+ Prettier、c8 覆盖率（`npm run test:coverage`）、`prepublishOnly` 构建守卫。
 - 测试：补充 watch 文件变更触发回归、CLI 进程级集成测试（`--dry-run`/`--validate`/`--domain`/`--archive`）、manifest 版本迁移回归、full-mode 孤儿清理回归。
 - 文档：英文 README（`README.md`）+ 中文 README（`README.zh-CN.md`）互链、README 输出示例、`CHANGELOG.md`、`docs/architecture.md`、`docs/README.md` 索引、`CONTRIBUTING.md`。
-- Loop 状态 schema 新增 `stall_counter` 字段与 `STALL_MAX` 阈值（ralph=3，coding/testing/writing=2）；STALL 停止条件由“连续多轮无变化”改为可判定的 `stall_counter >= STALL_MAX`（按任务状态签名逐轮比对），覆盖全部四个领域。
+- Loop 状态 schema 新增 `stall_counter` 字段与 `STALL_MAX` 阈值（ralph=3，coding/testing/writing=2）；STALL 停止条件由”连续多轮无变化”改为可判定的 `stall_counter >= STALL_MAX`（按任务状态签名逐轮比对），覆盖全部四个领域。
 - 测试：新增 ralph-loop 命令产物回归断言（禁止混入 coding scope/baseline 模型，且必须含 stall_counter/STALL_MAX）。
+- **Graph 引擎**：`ENGINE_TYPES` 新增 `”graph”`，领域定义支持 `engine: { type: “graph” }`；`tasks` 数组定义 DAG 节点（`id` / `title` / `depends_on` / `accept_criteria`），schema 层 DFS 环路检测拦截循环依赖。
+- **Graph 模板**：新增 `ralph-graph.md` 命令模板（DAG 路由协议：激活节点集 active_set、状态机 pending→in_progress→done/blocked、version=2 状态文件、STALL/MAX_CYCLES 停止条件、ralph-worker / ralph-reviewer 委派）。
+- **拓扑排序**：`buildRoutingTable` 以 Kahn 算法计算 DAG 拓扑序，产出 `entry_points` + `topological_order` + `nodes` 映射，注入为 `routing_table` 模板变量；`pickCommandTemplate` 按 engine type 路由到 `ralph-graph.md` / `ralph-loop.md`。
 
 ### Changed
 
@@ -45,6 +48,7 @@ All notable changes to this project are documented here.
 - 重抛错误统一附带 `{ cause }`，保留原始堆栈。
 - `FileChange` 携带已计算的 hash，`applyChanges` 复用，避免重复 SHA-256 计算。
 - ralph 内核 `ralph-loop` 命令模板的注入上下文下沉对齐到 ralph agent 输入契约（`accept_criteria` / `已知上下文` / `本轮变更`），移除误入的 coding 领域 `hard_scope` / `声明边界` / `Baseline`，消除命令层与 agent 层的契约漂移。
+- command 模板 lookup 由 `ralph-<engineType>` 扩展为 `<domainId>-<engineType>` → `ralph-<engineType>` 两级，graph 引擎通过 `engine.type` 自动路由到 `ralph-graph.md`。
 
 ### Fixed
 

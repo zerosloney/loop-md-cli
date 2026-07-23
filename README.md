@@ -55,7 +55,7 @@ Four built-in domains, each with dedicated templates enforcing its own engineeri
 
 | Domain    | Agent names                                    | Command      | Discipline                                                                                                                          |
 | --------- | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop   | **Kernel paradigm**: TaskList-driven + backpressure breaker (most general; fallback for custom domains without dedicated templates) |
+| `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop / ralph-graph | **Kernel paradigm**: TaskList-driven + backpressure breaker (loop); DAG routing + active-set execution (graph). Most general; fallback for custom domains without dedicated templates. |
 | `coding`  | coding-orchestrator / builder / reviewer       | coding-loop  | scope discipline + root-cause grouped fixes + zero tolerance for scope drift                                                        |
 | `testing` | test-orchestrator / writer / coverage-reviewer | test-loop    | source freeze + three signals (coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0)                                               |
 | `writing` | writing-orchestrator / author / reviewer       | writing-loop | writing boundary + three signals (terminology drift / dead links / code examples)                                                   |
@@ -76,11 +76,42 @@ loop-md-cli --opencode --domain-file ./my-domain.json
 loop-md-cli --claude --domain my-domain   # auto-scans .opencode/domains/
 ```
 
-The JSON requires `engine: { type: "loop" }`, and each command must specify `kind: "entry"` and `agent`.
+The JSON requires `engine: { type: "loop" }` or `engine: { type: "graph" }`. The `"graph"` type additionally requires a `tasks` array defining the DAG (see below). Each command must specify `kind: "entry"` and `agent`.
+
+#### Graph Engine
+
+To use the graph engine, set `engine.type` to `"graph"` and provide a `tasks` array:
+
+```json
+{
+  "id": "my-graph",
+  "engine": { "type": "graph" },
+  "agents": [
+    { "role": "orchestrator", "name": "graph-orchestrator" },
+    { "role": "executor",     "name": "graph-worker" },
+    { "role": "reviewer",     "name": "graph-reviewer" }
+  ],
+  "commands": [
+    { "kind": "entry", "agent": "graph-orchestrator", "name": "my-graph" }
+  ],
+  "tasks": [
+    { "id": "t1", "title": "Setup",       "depends_on": [] },
+    { "id": "t2", "title": "Build",       "depends_on": ["t1"] },
+    { "id": "t3", "title": "Test",        "depends_on": ["t2"] },
+    { "id": "t4", "title": "Deploy",      "depends_on": ["t2"] }
+  ]
+}
+```
+
+The `tasks` array defines a DAG where each task has `id`, `title`, and optional `depends_on` (array of task IDs). The CLI computes a topological sort and injects a `routing_table` into the generated command template, enabling the orchestrator to execute independent tasks in parallel.
+
+```bash
+loop-md-cli --opencode --domain-file ./my-graph-domain.json
+```
+
+> `loop` is the kernel paradigm; `coding/testing/writing` are domain specializations built on ralph. Backpressure is a general kernel capability: `coding/testing` use a strong gate (`npm test`), `writing` uses a weak gate (`npm run lint`).
 
 ## Custom Templates
-
-Templates load from two locations (same name overrides): built-in `src/templates/` and user-defined `.opencode/templates/`.
 
 ### Three-level Fallback
 
@@ -120,12 +151,14 @@ You are **{{name}}**, the Loop executor agent.
 | `{{description}}`  | description from the domain definition        | agent + command |
 | `{{agent}}`        | orchestrator name the loop binds to           | command         |
 | `{{backpressure}}` | the domain's backpressure breaker config      | orchestrator    |
+| `{{engine_type}}`  | `engine.type` from the domain definition      | agent           |
+| `{{routing_table}}`| DAG topological sort + entry points (graph)   | command (graph)  |
 
 ### Built-in Domain Templates
 
 | Domain    | Template files                                                                                | Discipline              |
 | --------- | --------------------------------------------------------------------------------------------- | ----------------------- |
-| `ralph`   | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md`           | TaskList + backpressure |
+| `ralph`   | `ralph-orchestrator.md` / `ralph-worker.md` / `ralph-reviewer.md` / `ralph-loop.md` / `ralph-graph.md` | TaskList + backpressure (loop); DAG routing + active-set (graph) |
 | `coding`  | `coding-orchestrator.md` / `coding-executor.md` / `coding-reviewer.md` / `coding-loop.md`     | scope + root-cause      |
 | `testing` | `testing-orchestrator.md` / `testing-executor.md` / `testing-reviewer.md` / `testing-loop.md` | source freeze + signals |
 | `writing` | `writing-orchestrator.md` / `writing-executor.md` / `writing-reviewer.md` / `writing-loop.md` | writing boundary        |
