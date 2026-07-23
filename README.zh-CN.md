@@ -20,6 +20,7 @@ npx @master0071/loop-md-cli --validate --all # 退出码 0 即所有平台配置
 loop-md-cli --all                          # 所有平台
 loop-md-cli --claude --opencode            # 指定平台
 loop-md-cli --claude --domain coding       # 指定领域
+loop-md-cli --kilo --domain ralph --domain graph  # 多领域共存
 loop-md-cli --all --dry-run                # 演练，不写入文件
 loop-md-cli --validate --all               # 验证一致性
 loop-md-cli --watch --claude               # 监听文件变化
@@ -257,7 +258,7 @@ approvalMode: plan
 | `--all`                | `-a`        | 生成/验证/导出所有平台                                             |
 | `--list`               | `-l`        | 列出支持的平台                                                     |
 | `--dry-run`            | `-n`        | 演练模式，不实际写入                                               |
-| `--domain`             | `-d`        | 使用指定领域                                                       |
+| `--domain`             | `-d`        | 使用指定领域（可多次传入：`-d ralph -d graph`）                              |
 | `--domain-file`        | `-D`        | 自定义领域文件路径                                                 |
 | `--model-orchestrator` | —           | 编排者子 agent 模型（如 `--model-orchestrator "DeepSeek-V4-Pro"`） |
 | `--model-executor`     | —           | 执行者子 agent 模型                                                |

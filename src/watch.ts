@@ -48,20 +48,20 @@ class Debouncer {
 /**
  * 启动 watch 模式，返回清理函数。
  * @param platforms 要监控的平台列表
- * @param domain 领域 ID
+ * @param domains 领域 ID 列表（支持多领域共存）
  * @param domainFiles 自定义领域文件路径
  * @param cwd 工作目录，默认为 process.cwd()
  * @param incremental 是否走增量生成（仅写变化的文件），默认 false（全量）
  */
 export function startWatch(
   platforms: string[],
-  domain?: string,
+  domains: string[] = [],
   domainFiles: string[] = [],
   cwd = process.cwd(),
   incremental = false,
 ): () => void {
   const debouncer = new Debouncer(() => {
-    runGeneration(platforms, domain, domainFiles, cwd, incremental);
+    runGeneration(platforms, domains, domainFiles, cwd, incremental);
   }, 300);
 
   const watchers: FSWatcher[] = [];
@@ -99,9 +99,9 @@ export function startWatch(
   console.log("👀 监听模板和领域文件变化...");
   console.log(`   平台: ${platforms.join(", ")}`);
   console.log(`   模式: ${modeLabel}`);
-  if (domain) console.log(`   领域: ${domain}`);
+  if (domains.length > 0) console.log(`   领域: ${domains.join(", ")}`);
   console.log("   按 Ctrl+C 退出\n");
-  runGeneration(platforms, domain, domainFiles, cwd, incremental);
+  runGeneration(platforms, domains, domainFiles, cwd, incremental);
 
   // 返回清理函数
   return () => {
@@ -124,17 +124,19 @@ export function startWatch(
 }
 function runGeneration(
   platforms: string[],
-  domain: string | undefined,
+  domains: string[],
   domainFiles: string[],
   cwd: string,
   incremental: boolean,
 ): void {
   for (const key of platforms) {
     const { agents, commands, written } = generatePlatform(key, {
-      domain,
+      domains,
       domainFiles,
       incremental,
       cwd,
+      // watch 模式下重新生成必须覆盖（模板/领域文件变了就该重写），不能因文件已存在而跳过。
+      skipIfExists: false,
     });
     if (incremental && typeof written === "number") {
       console.log(`[${key}] → agents/${agents} commands/${commands} (+${written} 更新)`);

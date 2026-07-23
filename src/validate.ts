@@ -81,7 +81,7 @@ function compareFile(expected: string, actualPath: string): string | null {
 export function validatePlatform(
   platformKey: string,
   templatesRoot = ".opencode/templates",
-  domain?: string,
+  domains?: string | string[],
   domainFiles: string[] = [],
   cwd = process.cwd(),
 ): ValidateResult {
@@ -92,11 +92,10 @@ export function validatePlatform(
   const agentsDir = join(base, "agents");
   const commandsDir = join(base, "commands");
 
-  const resolvedDomains = resolveDomains(domainFiles, cwd);
-  // 无 domain 时回退到 ralph 内核范式
-  const effectiveDomainId = domain ?? DEFAULT_DOMAIN_ID;
-  const resolvedDomain = findDomain(resolvedDomains, effectiveDomainId);
-  const renderDomainId = resolvedDomain.id;
+  const resolvedDomainsPool = resolveDomains(domainFiles, cwd);
+  // domains 支持单字符串（向后兼容）或数组；都为空时回退 ralph 内核范式
+  const domainList = Array.isArray(domains) ? domains : domains ? [domains] : [];
+  const effectiveDomainIds = domainList.length > 0 ? domainList : [DEFAULT_DOMAIN_ID];
 
   // ── 加载模板（一次加载，避免 loops 内重复读盘） ──
   const renderer = RENDERERS[platform.family];
@@ -110,46 +109,52 @@ export function validatePlatform(
 
   const issues: FileIssue[] = [];
 
-  // ── 生成预期 agent 列表 ──
-  const bpText = renderBackpressure(resolvedDomain.backpressure);
+  // ── 遍历所有领域，合并预期 agent + command 列表 ──
   const expectedAgents: RenderedAgent[] = [];
-  for (const a of resolvedDomain.agents) {
-    const agentBp = a.role === "orchestrator" ? bpText : "";
-    expectedAgents.push(
-      renderAgentWithTemplates(
-        renderer,
-        platform,
-        a.name,
-        a.description,
-        a.role,
-        agentTemplates,
-        renderDomainId,
-        agentBp,
-        a.model,
-        resolvedDomain.engine.type,
-      ),
-    );
-  }
-
   const expectedCommands: RenderedCommand[] = [];
-  const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
-  const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
-  for (const c of resolvedDomain.commands) {
-    expectedCommands.push(
-      renderCommandWithTemplates(
-        renderer,
-        platform,
-        c.name,
-        c.description,
-        c.agent,
-        commandTemplates,
-        renderDomainId,
-        resolvedDomain.engine.type,
-        resolvedDomain.tasks,
-        executorName,
-        reviewerName,
-      ),
-    );
+
+  for (const domainId of effectiveDomainIds) {
+    const resolvedDomain = findDomain(resolvedDomainsPool, domainId);
+    const renderDomainId = resolvedDomain.id;
+    const bpText = renderBackpressure(resolvedDomain.backpressure);
+
+    for (const a of resolvedDomain.agents) {
+      const agentBp = a.role === "orchestrator" ? bpText : "";
+      expectedAgents.push(
+        renderAgentWithTemplates(
+          renderer,
+          platform,
+          a.name,
+          a.description,
+          a.role,
+          agentTemplates,
+          renderDomainId,
+          agentBp,
+          a.model,
+          resolvedDomain.engine.type,
+        ),
+      );
+    }
+
+    const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
+    const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
+    for (const c of resolvedDomain.commands) {
+      expectedCommands.push(
+        renderCommandWithTemplates(
+          renderer,
+          platform,
+          c.name,
+          c.description,
+          c.agent,
+          commandTemplates,
+          renderDomainId,
+          resolvedDomain.engine.type,
+          resolvedDomain.tasks,
+          executorName,
+          reviewerName,
+        ),
+      );
+    }
   }
 
   // ── 扫描磁盘 agent 文件 ──
@@ -210,7 +215,7 @@ export function validatePlatform(
 
   return {
     platform: platformKey,
-    domain,
+    domain: effectiveDomainIds.length > 0 ? effectiveDomainIds.join(", ") : undefined,
     totalExpected,
     issues,
     issueCount: issues.length,

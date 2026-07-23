@@ -70,7 +70,7 @@ function copyDir(srcDir: string, destDir: string): void {
 export function exportArchive(
   platforms: string[],
   output: string,
-  domain?: string,
+  domains: string[] = [],
   domainFiles: string[] = [],
   cwd = process.cwd(),
 ): ExportResult {
@@ -84,7 +84,7 @@ export function exportArchive(
     copyDir(join(cwd, ".opencode", "domains"), join(tmpBase, ".opencode", "domains"));
 
     for (const key of platforms) {
-      generatePlatform(key, { domain, domainFiles, cwd: tmpBase });
+      generatePlatform(key, { domains, domainFiles, cwd: tmpBase });
     }
 
     // 收集文件

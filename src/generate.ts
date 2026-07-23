@@ -8,7 +8,7 @@
  *   engine.type (= "loop" | "graph") → 决定 command 模板 lookup 域
  *   commands[].agent                 → 决定 command 模板里 {{agent}} 的取值
  */
-import { mkdirSync, existsSync, unlinkSync } from "node:fs";
+import { mkdirSync, existsSync, unlinkSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { PLATFORMS, type Family, type Platform } from "./platforms.js";
@@ -59,22 +59,6 @@ export interface RenderedAgent {
 export interface RenderedCommand {
   name: string;
   content: string;
-}
-
-interface AgentSourceEntry {
-  role: string;
-  key: string;
-  description: string;
-  model?: string;
-}
-
-interface CommandSourceEntry {
-  /** 模板 lookup key（即 engine.type，例如 "loop"）。 */
-  engineType: string;
-  key: string;
-  description: string;
-  /** command 模板里 {{agent}} 的取值（command.agent 显式声明）。 */
-  agent: string;
 }
 
 // ── Backpressure 渲染 ──
@@ -346,16 +330,95 @@ export interface GenerateOptions {
   dryRun?: boolean;
   /** 用户模板根目录（相对 cwd，默认 .opencode/templates）。 */
   templatesRoot?: string;
-  /** 领域 id；缺省回退 ralph 内核范式。 */
+  /** 领域 id；缺省回退 ralph 内核范式。与 domains 合并去重。 */
   domain?: string;
+  /** 多领域 id 列表，支持一次生成多个领域、互不清理。与 domain 合并去重。 */
+  domains?: string[];
   /** 额外自定义领域文件路径（JSON）。 */
   domainFiles?: string[];
   /** 增量生成：仅重写内容变化的文件（默认 false）。 */
   incremental?: boolean;
+  /** 跳过同名文件已存在的领域（默认 true）。预检发现任一目标文件已存在则跳过整个领域。 */
+  skipIfExists?: boolean;
   /** 工作目录（默认 process.cwd()）。 */
   cwd?: string;
   /** 按角色覆盖子 agent 模型（orchestrator/executor/reviewer → model）。 */
   modelOverrides?: Record<string, string>;
+}
+
+/**
+ * 渲染单个领域的所有 agent + command 文件，返回相对路径 → 内容的 map。
+ * 不写盘，不预检——只做模板渲染。供 generatePlatform 在多领域循环里复用。
+ */
+function renderDomainFiles(
+  resolvedDomain: ResolvedDomain,
+  agentTemplates: Record<string, string>,
+  commandTemplates: Record<string, string>,
+  renderer: Renderer,
+  platform: Platform,
+  modelOverrides?: Record<string, string>,
+): { files: Map<string, string>; agents: number; commands: number } {
+  const files = new Map<string, string>();
+  let agentCount = 0;
+
+  for (const a of resolvedDomain.agents) {
+    const role = a.role;
+    const key = a.name;
+    const description = a.description;
+    const model = modelOverrides?.[a.role] ?? a.model;
+    const tpl = pickTemplate(agentTemplates, resolvedDomain.id, role);
+    if (!tpl) {
+      throw new Error(
+        `未找到角色模板: ${role} (domain=${resolvedDomain.id})。预期文件 src/templates/agents/${resolvedDomain.id}-${role}.md 或 ${role}.md`,
+      );
+    }
+    const backpressureText =
+      role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
+    const agentVars: Record<string, string> = {
+      name: key,
+      description,
+      backpressure: backpressureText,
+      engine_type: resolvedDomain.engine.type,
+      domain: resolvedDomain.id,
+    };
+    const rendered = renderTemplate(tpl, agentVars);
+    const { frontmatter, body } = parseSource(rendered);
+    const src: AgentSource = { name: key, description, frontmatter, body, role, model };
+    const out = renderer.renderAgent(src, platform);
+    files.set(`agents/${key}.md`, out);
+    agentCount++;
+  }
+
+  let commandCount = 0;
+  // 按 role 查找 executor/reviewer 的 agent 名，供 command 模板的 {{executor_name}}/{{reviewer_name}} 注入。
+  // 内核范式模板（ralph-loop / ralph-graph）被多个领域共享回退，不能硬编码 worker/reviewer 名。
+  const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
+  const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
+
+  for (const c of resolvedDomain.commands) {
+    const engineType = resolvedDomain.engine.type;
+    const tpl = pickCommandTemplate(commandTemplates, resolvedDomain.id, engineType);
+    if (!tpl) {
+      throw new Error(
+        `未找到命令模板: engine.type=${engineType} (domain=${resolvedDomain.id})。预期文件 src/templates/commands/${resolvedDomain.id}-${engineType}.md 或 ${engineType}.md`,
+      );
+    }
+    const cmdVars: Record<string, string> = { name: c.name, description: c.description, agent: c.agent };
+    cmdVars.domain = resolvedDomain.id;
+    cmdVars.executor_name = executorName;
+    cmdVars.reviewer_name = reviewerName;
+    if (engineType === "graph" && resolvedDomain.tasks) {
+      cmdVars.routing_table = buildRoutingTable(resolvedDomain.tasks);
+    }
+    const rendered = renderTemplate(tpl, cmdVars);
+    const { frontmatter, body } = parseSource(rendered);
+    const src: CommandSource = { name: c.name, description: c.description, frontmatter, body };
+    const out = renderer.renderCommand(src, platform);
+    files.set(`commands/${c.name}.md`, out);
+    commandCount++;
+  }
+
+  return { files, agents: agentCount, commands: commandCount };
 }
 
 export function generatePlatform(
@@ -366,8 +429,10 @@ export function generatePlatform(
     dryRun = false,
     templatesRoot = DEFAULT_TEMPLATES_ROOT,
     domain,
+    domains = [],
     domainFiles = [],
     incremental = false,
+    skipIfExists = true,
     cwd = process.cwd(),
     modelOverrides,
   } = options;
@@ -387,81 +452,53 @@ export function generatePlatform(
   const agentTemplates = { ...pkgAgentTemplates, ...userAgentTemplates };
   const commandTemplates = { ...pkgCommandTemplates, ...userCommandTemplates };
 
-  const resolvedDomains = resolveDomains(domainFiles, cwd);
-  // 无 domain 时回退到 ralph 内核范式（DEFAULT_DOMAIN_ID）
-  const effectiveDomainId = domain ?? DEFAULT_DOMAIN_ID;
-  const resolvedDomain: ResolvedDomain = findDomain(resolvedDomains, effectiveDomainId);
+  const resolvedDomainsPool = resolveDomains(domainFiles, cwd);
+  // domain + domains 合并去重，都为空时回退 ralph 内核范式。
+  const domainIds = [...new Set([...(domain ? [domain] : []), ...domains])];
+  const effectiveDomainIds = domainIds.length > 0 ? domainIds : [DEFAULT_DOMAIN_ID];
 
-  // 收集所有预期文件
+  // 收集所有预期文件（跨领域合并到同一 map，孤儿清理只删"所有领域都不需要"的文件）
   const expectedFiles = new Map<string, string>();
   let agentCount = 0;
-  const agentEntries: AgentSourceEntry[] = resolvedDomain.agents.map((a) => ({
-    role: a.role,
-    key: a.name,
-    description: a.description,
-    model: modelOverrides?.[a.role] ?? a.model,
-  }));
-
-  for (const { role, key, description, model } of agentEntries) {
-    const tpl = pickTemplate(agentTemplates, resolvedDomain.id, role);
-    if (!tpl) {
-      throw new Error(
-        `未找到角色模板: ${role} (domain=${resolvedDomain.id})。预期文件 src/templates/agents/${resolvedDomain.id}-${role}.md 或 ${role}.md`,
-      );
-    }
-    const backpressureText =
-      role === "orchestrator" ? renderBackpressure(resolvedDomain.backpressure) : "";
-    const agentVars: Record<string, string> = {
-      name: key,
-      description,
-      backpressure: backpressureText,
-      engine_type: resolvedDomain.engine.type,
-    };
-    agentVars.domain = resolvedDomain.id;
-    const rendered = renderTemplate(tpl, agentVars);
-    const { frontmatter, body } = parseSource(rendered);
-    const src: AgentSource = { name: key, description, frontmatter, body, role, model };
-    const out = renderer.renderAgent(src, platform);
-    const relativePath = `agents/${key}.md`;
-    expectedFiles.set(relativePath, out);
-    agentCount++;
-  }
-
   let commandCount = 0;
-  const commandEntries: CommandSourceEntry[] = resolvedDomain.commands.map((c) => ({
-    engineType: resolvedDomain.engine.type,
-    key: c.name,
-    description: c.description,
-    agent: c.agent,
-  }));
 
-  // 按 role 查找 executor/reviewer 的 agent 名，供 command 模板的 {{executor_name}}/{{reviewer_name}} 注入。
-  // 内核范式模板（ralph-loop / ralph-graph）被多个领域共享回退，不能硬编码 worker/reviewer 名。
-  const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
-  const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
+  for (const domainId of effectiveDomainIds) {
+    const resolvedDomain = findDomain(resolvedDomainsPool, domainId);
+    const rendered = renderDomainFiles(
+      resolvedDomain,
+      agentTemplates,
+      commandTemplates,
+      renderer,
+      platform,
+      modelOverrides,
+    );
 
-  for (const { engineType, key, description, agent } of commandEntries) {
-    const tpl = pickCommandTemplate(commandTemplates, resolvedDomain.id, engineType);
-    if (!tpl) {
-      throw new Error(
-        `未找到命令模板: engine.type=${engineType} (domain=${resolvedDomain.id})。预期文件 src/templates/commands/${resolvedDomain.id}-${engineType}.md 或 ${engineType}.md`,
-      );
+    // 预检：任一目标文件已存在 → 跳过整个领域（不覆盖）。
+    // 但仍需把已存在的文件纳入 expectedFiles，避免被孤儿清理删除（保留共存）。
+    if (skipIfExists && !dryRun) {
+      const conflict = [...rendered.files.keys()].find((rel) => existsSync(join(base, rel)));
+      if (conflict) {
+        console.log(
+          `[skip] 领域 ${domainId} 的文件已存在（${conflict}），跳过生成。如需覆盖请先删除对应文件。`,
+        );
+        // 把磁盘上已存在的该领域文件纳入 expected，孤儿清理会保留它们
+        for (const rel of rendered.files.keys()) {
+          const diskPath = join(base, rel);
+          if (existsSync(diskPath)) {
+            expectedFiles.set(rel, readFileSync(diskPath, "utf-8"));
+          }
+        }
+        continue;
+      }
     }
-    const cmdVars: Record<string, string> = { name: key, description, agent };
-    cmdVars.domain = resolvedDomain.id;
-    cmdVars.executor_name = executorName;
-    cmdVars.reviewer_name = reviewerName;
-    if (engineType === "graph" && resolvedDomain.tasks) {
-      cmdVars.routing_table = buildRoutingTable(resolvedDomain.tasks);
+
+    for (const [rel, content] of rendered.files) {
+      expectedFiles.set(rel, content);
     }
-    const rendered = renderTemplate(tpl, cmdVars);
-    const { frontmatter, body } = parseSource(rendered);
-    const src: CommandSource = { name: key, description, frontmatter, body };
-    const out = renderer.renderCommand(src, platform);
-    const relativePath = `commands/${key}.md`;
-    expectedFiles.set(relativePath, out);
-    commandCount++;
+    agentCount += rendered.agents;
+    commandCount += rendered.commands;
   }
+
   if (dryRun) {
     for (const [relPath] of expectedFiles) {
       console.log(`[dry-run] 将写入 ${join(platform.dir, relPath)}`);
@@ -489,7 +526,7 @@ export function generatePlatform(
   }
 
   // ── 全量模式 ──
-  // 全量也维护 manifest 并清理孤儿：切换 domain 后，删除工具曾生成、本次不再预期的文件。
+  // 全量也维护 manifest 并清理孤儿：本次所有领域的文件都不需要的老文件会被删除。
   // 只删 manifest 记录过的（工具自己生成的），用户手写文件不受影响——与增量模式同一安全边界。
   const manifest = loadManifest(platformKey, cwd);
   for (const [relativePath, content] of expectedFiles) {

@@ -20,6 +20,7 @@ Requires Node.js >= 18, zero runtime dependencies.
 loop-md-cli --all                          # all platforms
 loop-md-cli --claude --opencode            # specific platforms
 loop-md-cli --claude --domain coding       # specific domain
+loop-md-cli --kilo --domain ralph --domain graph  # multi-domain coexistence
 loop-md-cli --all --dry-run                # dry run, writes nothing
 loop-md-cli --validate --all               # validate consistency
 loop-md-cli --watch --claude               # watch for file changes
@@ -257,7 +258,7 @@ approvalMode: plan
 | `--all`                | `-a`        | Generate/validate/export all platforms                                       |
 | `--list`               | `-l`        | List supported platforms                                                     |
 | `--dry-run`            | `-n`        | Dry run, write nothing                                                       |
-| `--domain`             | `-d`        | Use the given domain                                                         |
+| `--domain`             | `-d`        | Use the given domain (repeatable: `-d ralph -d graph`)                      |
 | `--domain-file`        | `-D`        | Path to a custom domain file                                                 |
 | `--model-orchestrator` | —           | Orchestrator sub-agent model (e.g. `--model-orchestrator "DeepSeek-V4-Pro"`) |
 | `--model-executor`     | —           | Executor sub-agent model                                                     |

@@ -6,6 +6,21 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-24
+
+自 v0.6.1 以来的改动：支持多领域共存生成 + 同名预检跳过。
+
+### Added
+
+- **多领域共存**：`--domain` 支持多次传入或逗号分隔，一次生成多个领域，互不清理。例如 `loop-md-cli --kilo --domain ralph --domain graph` 会在同一个 `.kilo/` 里保留两套配置（6 agents + 2 commands）。`generatePlatform` 新增 `domains?: string[]` 选项（与 `domain?` 合并去重）。
+- **同名预检跳过**：生成某领域前检查目标文件是否已存在，只要有任一文件已存在则跳过整个领域（不覆盖、不清理），并打印 `[skip]` 提示。被跳过领域的已有文件会被保留（纳入 expectedFiles 防止孤儿清理误删）。新增 `skipIfExists` 选项（默认 true，watch 模式下强制 false 以保证重新生成）。
+
+### Changed
+
+- `cli.ts`：`args.domain`（string）改为 `args.domains`（string[]），`--domain` / `-d` 支持多次传入和逗号分隔；`resolveDomainId` 改为 `resolveDomainIds` 返回数组，去掉多 domain-file 报错。
+- `validate.ts`：`validatePlatform` 第三参数支持 `string | string[]`，遍历所有领域合并预期文件。
+- `watch.ts` / `export.ts`：透传 `domains` 数组；watch 模式强制 `skipIfExists: false`。
+
 ## [0.6.1] - 2026-07-24
 
 自 v0.6.0 以来的改动：graph 领域恢复独立三角色 + 内核模板占位符化 + 回退警告噪音消除。
@@ -144,7 +159,8 @@ All notable changes to this project are documented here.
 
 - 初始发布（loop-forge）：多平台 AI agent/command 配置生成器。
 
-[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/master0071/loop-md-cli/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/master0071/loop-md-cli/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/master0071/loop-md-cli/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/master0071/loop-md-cli/compare/v0.5.0...v0.5.1

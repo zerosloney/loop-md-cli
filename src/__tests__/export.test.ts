@@ -180,7 +180,7 @@ describe("exportArchive", () => {
 
     const outputPath = join(tmpDir, "test-unicode.zip");
     // 用 --domain cn-domain 触发该领域，生成中文文件名
-    const result = exportArchive(["claude"], outputPath, "cn-domain", [], tmpDir);
+    const result = exportArchive(["claude"], outputPath, ["cn-domain"], [], tmpDir);
 
     const buf = readFileSync(result.filePath);
     const entries = parseZip(buf);

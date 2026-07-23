@@ -83,6 +83,7 @@ function printHelp(): void {
     "  loop-md-cli --all                        # 生成所有平台",
     "  loop-md-cli --claude --opencode          # 生成指定平台",
     "  loop-md-cli --opencode --domain testing  # 使用测试领域生成",
+    "  loop-md-cli --kilo --domain ralph --domain graph  # 多领域共存生成",
     "  loop-md-cli --opencode --dry-run         # 演练模式预览输出",
     "  loop-md-cli --validate --all             # 验证所有平台配置",
     "  loop-md-cli --validate --claude -d coding  # 验证编程领域 claude 配置",
@@ -113,7 +114,7 @@ interface Args {
   all: boolean;
   list: boolean;
   dryRun: boolean;
-  domain: string;
+  domains: string[];
   domainFiles: string[];
   picked: string[];
   modelOverrides: Record<string, string>;
@@ -130,7 +131,7 @@ function parseArgs(argv: string[]): Args {
     all: false,
     list: false,
     dryRun: false,
-    domain: "",
+    domains: [],
     domainFiles: [],
     picked: [],
     modelOverrides: {},
@@ -162,7 +163,10 @@ function parseArgs(argv: string[]): Args {
     } else if (tok === "--dry-run" || tok === "-n") {
       args.dryRun = true;
     } else if ((tok === "--domain" || tok === "-d") && i + 1 < argv.length) {
-      args.domain = argv[i + 1];
+      // 支持逗号分隔：--domain ralph,graph 等价于 --domain ralph --domain graph
+      for (const id of argv[i + 1].split(",").map((s) => s.trim()).filter(Boolean)) {
+        args.domains.push(id);
+      }
       i++;
     } else if ((tok === "--domain-file" || tok === "-D") && i + 1 < argv.length) {
       args.domainFiles.push(argv[i + 1]);
@@ -195,29 +199,27 @@ function parseArgs(argv: string[]): Args {
 // ── Domain 解析 ──
 
 /**
- * 解析最终生效的 domain id。规则：
- *   1. 显式 --domain 优先
- *   2. 否则若传了单个 --domain-file，从文件读 id 自动推导（README 宣传的用法）
- *   3. 多个 --domain-file 且无 --domain：报错（多个文件无法确定单一 id）
- *   4. 都没有：undefined（由 generate.ts 回退到 ralph）
+ * 解析最终生效的 domain id 列表。规则：
+ *   1. 显式 --domain 优先（支持多个，逗号分隔）
+ *   2. 否则从 --domain-file 读取每个文件的 id 自动推导
+ *   3. 都没有：空数组（由 generate.ts 回退到 ralph）
  *
  * 读文件失败时抛错——和后续 generate 阶段一致，不静默吞。
  */
-function resolveDomainId(explicit?: string, domainFiles: string[] = []): string | undefined {
-  if (explicit) return explicit;
-  if (domainFiles.length === 0) return undefined;
-  if (domainFiles.length > 1) {
-    throw new Error("传了多个 --domain-file 但未指定 --domain。请用 --domain <id> 明确选择。");
+function resolveDomainIds(explicit: string[] = [], domainFiles: string[] = []): string[] {
+  if (explicit.length > 0) return explicit;
+  const ids: string[] = [];
+  for (const file of domainFiles) {
+    ids.push(readDomainFile(file).id);
   }
-  const d = readDomainFile(domainFiles[0]);
-  return d.id;
+  return ids;
 }
 
 // ── Interactive selection ──
 
 function interactiveSelect(
   dryRun: boolean,
-  domain?: string,
+  domains: string[] = [],
   domainFiles: string[] = [],
   incremental = false,
   modelOverrides: Record<string, string> = {},
@@ -265,7 +267,7 @@ function interactiveSelect(
     finish(picked);
   });
   function finish(selected: string[]): never {
-    runGenerate(selected, dryRun, domain, domainFiles, incremental, modelOverrides);
+    runGenerate(selected, dryRun, domains, domainFiles, incremental, modelOverrides);
     process.exit(0);
   }
 }
@@ -283,7 +285,7 @@ function listPlatforms(): void {
 function runGenerate(
   selected: string[],
   dryRun: boolean,
-  domain?: string,
+  domains: string[] = [],
   domainFiles: string[] = [],
   incremental = false,
   modelOverrides: Record<string, string> = {},
@@ -295,13 +297,14 @@ function runGenerate(
           .map(([r, m]) => `${r}=${m}`)
           .join(", ")})`
       : "";
+  const domainLabel = domains.length > 0 ? ` (领域: ${domains.join(", ")})` : "";
   console.log(
-    `生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domain ? ` (领域: ${domain})` : ""}${modelInfo}`,
+    `生成 ${selected.length} 个平台 (${mode}): ${selected.join(", ")}${domainLabel}${modelInfo}`,
   );
   for (const key of selected) {
     const result = generatePlatform(key, {
       dryRun,
-      domain,
+      domains,
       domainFiles,
       incremental,
       modelOverrides,
@@ -319,10 +322,10 @@ function runGenerate(
   console.log("\n完成。修改 agents/ 或 commands/ 后重跑同步。");
 }
 
-function runValidate(selected: string[], domain?: string, domainFiles: string[] = []): number {
+function runValidate(selected: string[], domains: string[] = [], domainFiles: string[] = []): number {
   let totalIssues = 0;
   for (const key of selected) {
-    const result = validatePlatform(key, ".opencode/templates", domain, domainFiles);
+    const result = validatePlatform(key, ".opencode/templates", domains, domainFiles);
     console.log(formatValidateResult(result));
     totalIssues += result.issueCount;
     console.log("");
@@ -334,19 +337,18 @@ function runValidate(selected: string[], domain?: string, domainFiles: string[] 
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
-  // --domain 未指定时从 --domain-file 自动推导（单文件场景）。
-  // 多文件且无 --domain 时这里抛错，避免后续静默用错领域。
-  let domainId: string | undefined;
+  // --domain 未指定时从 --domain-file 自动推导。
+  let domainIds: string[];
   try {
-    domainId = resolveDomainId(args.domain, args.domainFiles);
+    domainIds = resolveDomainIds(args.domains, args.domainFiles);
   } catch (err) {
     console.error(`错误: ${(err as Error).message}`);
     process.exit(1);
   }
-  runCommand(args, domainId);
+  runCommand(args, domainIds);
 }
 
-function runCommand(args: Args, domainId: string | undefined): void {
+function runCommand(args: Args, domainIds: string[]): void {
   if (args.help) {
     printHelp();
     return;
@@ -372,7 +374,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
       console.error("错误: --validate 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const totalIssues = runValidate(selected, domainId, args.domainFiles);
+    const totalIssues = runValidate(selected, domainIds, args.domainFiles);
     if (totalIssues > 0) {
       console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 loop-md-cli --all 重新生成。`);
       process.exit(1);
@@ -391,7 +393,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
       console.error("错误: --watch 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const cleanup = startWatch(selected, domainId, args.domainFiles, undefined, args.incremental);
+    const cleanup = startWatch(selected, domainIds, args.domainFiles, undefined, args.incremental);
     process.on("SIGINT", () => {
       console.log("\n👋 监听已停止。");
       cleanup();
@@ -410,7 +412,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
       console.error("错误: --archive 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const result = exportArchive(selected, args.archive, domainId, args.domainFiles);
+    const result = exportArchive(selected, args.archive, domainIds, args.domainFiles);
     console.log(
       `📦 已导出 ${result.fileCount} 个文件 (${result.platformCount} 个平台) → ${result.filePath}`,
     );
@@ -425,7 +427,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
   } else {
     interactiveSelect(
       args.dryRun,
-      domainId,
+      domainIds,
       args.domainFiles,
       args.incremental,
       args.modelOverrides,
@@ -435,7 +437,7 @@ function runCommand(args: Args, domainId: string | undefined): void {
   runGenerate(
     selected,
     args.dryRun,
-    domainId,
+    domainIds,
     args.domainFiles,
     args.incremental,
     args.modelOverrides,

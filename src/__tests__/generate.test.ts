@@ -819,6 +819,53 @@ describe("generatePlatform integration", () => {
       `builtin graph domain should not emit fallback warnings, got: ${JSON.stringify(fallbackWarns)}`,
     );
   });
+
+  it("multiple domains coexist without cleanup (--domain ralph --domain graph)", () => {
+    // 两领域无同名冲突，应全部生成、互不清理
+    const result = generatePlatform("claude", { domains: ["ralph", "graph"] });
+    const agentsDir = join(tmpDir, ".claude", "agents");
+    const commandsDir = join(tmpDir, ".claude", "commands");
+    const agentFiles = listFiles(agentsDir).sort();
+    const commandFiles = listFiles(commandsDir).sort();
+    // ralph 三角色 + graph 三角色 = 6 agents
+    assert.equal(agentFiles.length, 6, "should generate 6 agents (ralph + graph)");
+    assert.ok(agentFiles.includes("ralph-orchestrator.md"), "ralph orchestrator present");
+    assert.ok(agentFiles.includes("graph-orchestrator.md"), "graph orchestrator present");
+    assert.ok(agentFiles.includes("ralph-worker.md"), "ralph worker present");
+    assert.ok(agentFiles.includes("graph-worker.md"), "graph worker present");
+    // ralph-loop + ralph-graph = 2 commands
+    assert.equal(commandFiles.length, 2, "should generate 2 commands");
+    assert.ok(commandFiles.includes("ralph-loop.md"), "ralph-loop present");
+    assert.ok(commandFiles.includes("ralph-graph.md"), "ralph-graph present");
+    assert.equal(result.agents, 6);
+    assert.equal(result.commands, 2);
+  });
+
+  it("skipIfExists skips domain when a target file already exists", () => {
+    // 预置 ralph 的一个文件，再生成 ralph 应整域跳过
+    const agentsDir = join(tmpDir, ".claude", "agents");
+    mkdirSync(agentsDir, { recursive: true });
+    writeFileSync(join(agentsDir, "ralph-orchestrator.md"), "# user-written\n", "utf-8");
+
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(String(args[0]));
+    try {
+      generatePlatform("claude", { domain: "ralph" });
+    } finally {
+      console.log = origLog;
+    }
+    // 应有 skip 提示
+    assert.ok(
+      logs.some((l) => l.includes("[skip]") && l.includes("ralph")),
+      `should log skip for ralph domain, got: ${JSON.stringify(logs)}`,
+    );
+    // 预置的用户文件不应被覆盖
+    const content = readFileSync(join(agentsDir, "ralph-orchestrator.md"), "utf-8");
+    assert.equal(content, "# user-written\n", "user-written file must not be overwritten");
+    // 其余 ralph 文件不应生成（整域跳过）
+    assert.ok(!existsSync(join(agentsDir, "ralph-worker.md")), "skipped domain should not generate other files");
+  });
 });
 
 // ─── buildRoutingTable 单测 ───
