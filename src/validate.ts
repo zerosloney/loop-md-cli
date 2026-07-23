@@ -143,6 +143,7 @@ export function validatePlatform(
         commandTemplates,
         renderDomainId,
         resolvedDomain.engine.type,
+        resolvedDomain.tasks,
       ),
     );
   }

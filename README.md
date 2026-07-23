@@ -56,6 +56,7 @@ Four built-in domains, each with dedicated templates enforcing its own engineeri
 | Domain    | Agent names                                    | Command      | Discipline                                                                                                                          |
 | --------- | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop / ralph-graph | **Kernel paradigm**: TaskList-driven + backpressure breaker (loop); DAG routing + active-set execution (graph). Most general; fallback for custom domains without dedicated templates. |
+| `graph`   | graph-orchestrator / ralph-worker / ralph-reviewer | ralph-graph | **Graph paradigm**: DAG topology routing with a built-in example task graph (t1→t2/t3→t4). Use as a starting point for custom DAG domains. |
 | `coding`  | coding-orchestrator / builder / reviewer       | coding-loop  | scope discipline + root-cause grouped fixes + zero tolerance for scope drift                                                        |
 | `testing` | test-orchestrator / writer / coverage-reviewer | test-loop    | source freeze + three signals (coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0)                                               |
 | `writing` | writing-orchestrator / author / reviewer       | writing-loop | writing boundary + three signals (terminology drift / dead links / code examples)                                                   |
@@ -80,19 +81,19 @@ The JSON requires `engine: { type: "loop" }` or `engine: { type: "graph" }`. The
 
 #### Graph Engine
 
-To use the graph engine, set `engine.type` to `"graph"` and provide a `tasks` array:
+A built-in `graph` domain is ready to use out of the box (`--domain graph`); the example below shows how to define a **custom** graph domain with your own task DAG:
 
 ```json
 {
   "id": "my-graph",
   "engine": { "type": "graph" },
   "agents": [
-    { "role": "orchestrator", "name": "graph-orchestrator" },
-    { "role": "executor",     "name": "graph-worker" },
-    { "role": "reviewer",     "name": "graph-reviewer" }
+    { "role": "orchestrator", "name": "my-orchestrator" },
+    { "role": "executor",     "name": "my-worker" },
+    { "role": "reviewer",     "name": "my-reviewer" }
   ],
   "commands": [
-    { "kind": "entry", "agent": "graph-orchestrator", "name": "my-graph" }
+    { "kind": "entry", "agent": "my-orchestrator", "name": "my-graph" }
   ],
   "tasks": [
     { "id": "t1", "title": "Setup",       "depends_on": [] },

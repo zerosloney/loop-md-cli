@@ -784,6 +784,23 @@ describe("generatePlatform integration", () => {
     );
     assert.ok(content.includes("active_set"), "should contain active_set in state schema");
   });
+
+  it("builtin graph domain generates ralph-graph command with routing table", () => {
+    const result = generatePlatform("claude", { domain: "graph" });
+    assert.equal(result.commands, 1, "should generate exactly 1 command");
+    const commandDir = join(tmpDir, ".claude", "commands");
+    const commandFiles = listFiles(commandDir);
+    assert.ok(commandFiles.includes("ralph-graph.md"), "should generate ralph-graph.md command");
+    const content = readFileSync(join(commandDir, "ralph-graph.md"), "utf-8");
+    assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
+    assert.ok(content.includes(`"entry_points"`), "should contain entry_points");
+    assert.ok(content.includes(`"topological_order"`), "should contain topological_order");
+    // 内置 graph 领域复用 ralph-worker / ralph-reviewer（模板委派段硬编码）
+    assert.ok(
+      content.includes("ralph-worker"),
+      "should reference ralph-worker for delegation (shared with ralph kernel)",
+    );
+  });
 });
 
 // ─── buildRoutingTable 单测 ───

@@ -62,7 +62,7 @@ function printHelp(): void {
     "  --all, -a               生成所有支持的平台",
     "  --list, -l              列出支持的平台",
     "  --dry-run, -n           演练模式，不实际写入文件",
-    "  --domain, -d <id>       使用指定领域（builtin: ralph, coding, testing, writing；默认 ralph）",
+    "  --domain, -d <id>       使用指定领域（builtin: ralph, graph, coding, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
     "",
     "模型选项（通用，可选，不填则子 agent 继承主会话模型）:",

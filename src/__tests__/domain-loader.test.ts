@@ -15,6 +15,16 @@ describe("domain-loader", () => {
     assert.ok(ids.includes("testing"));
     assert.ok(ids.includes("writing"));
     assert.ok(ids.includes("ralph"));
+    assert.ok(ids.includes("graph"));
+  });
+
+  it("finds builtin graph domain with tasks DAG", () => {
+    const domains = resolveDomains();
+    const d = findDomain(domains, "graph");
+    assert.equal(d.id, "graph");
+    assert.equal(d.engine.type, "graph");
+    assert.ok(d.tasks && d.tasks.length > 0, "graph domain must define tasks");
+    assert.ok(d.commands.some((c) => c.name === "ralph-graph"), "graph domain must emit ralph-graph command");
   });
 
   it("finds builtin domain by id", () => {

@@ -6,6 +6,19 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-23
+
+自 v0.5.1 以来的改动：新增内置 `graph` 领域，`--domain graph` 开箱即用生成 DAG 路由命令。
+
+### Added
+
+- 新增内置 `graph` 领域（`engine.type=graph`）：内置示例 DAG 任务图（t1→t2/t3→t4），生成 `ralph-graph` 命令 + 路由表。`--domain graph` 即可直接使用，无需自定义 JSON。graph 领域的 executor/reviewer 复用 `ralph-worker` / `ralph-reviewer`（`ralph-graph.md` 模板委派段硬编码），仅 orchestrator 独立为 `graph-orchestrator`。
+- `Domain` 接口增加 `tasks?: TaskDefinition[]` 字段；`loadBuiltinDomains` 同步拷贝 tasks，使内置 graph 领域的 DAG 定义进入生成管线。
+
+### Fixed
+
+- `--validate` 误报 graph 命令 stale：`renderCommandWithTemplates`（validate 复用的渲染管线）漏传 `routing_table`，导致 graph 命令模板里的 `{{routing_table}}` 未替换，与磁盘上已渲染的文件不一致。补 `tasks` 参数，validate 传 `resolvedDomain.tasks`，与 `generatePlatform` 注入路径对齐（同 v0.5.1 `engine_type` 漏传同类问题）。
+
 ## [0.5.1] - 2026-07-23
 
 自 v0.5.0 以来的改动：graph 引擎鲁棒性修复（拓扑环路检测、生成文件原子写入、模板回退警告、STALL 签名优化）。
@@ -118,7 +131,10 @@ All notable changes to this project are documented here.
 
 - 初始发布（loop-forge）：多平台 AI agent/command 配置生成器。
 
-[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/master0071/loop-md-cli/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/master0071/loop-md-cli/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/master0071/loop-md-cli/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/master0071/loop-md-cli/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/master0071/loop-md-cli/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/master0071/loop-md-cli/compare/v0.2.0...v0.3.0

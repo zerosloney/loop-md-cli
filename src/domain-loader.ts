@@ -37,6 +37,12 @@ function loadBuiltinDomains(): ResolvedDomain[] {
       name: c.name,
       description: c.description,
     })),
+    tasks: d.tasks?.map((t) => ({
+      id: t.id,
+      title: t.title,
+      depends_on: t.depends_on ? [...t.depends_on] : undefined,
+      accept_criteria: t.accept_criteria ? [...t.accept_criteria] : undefined,
+    })),
     backpressure: d.backpressure,
   }));
 }

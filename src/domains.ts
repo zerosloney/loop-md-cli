@@ -1,7 +1,7 @@
 /**
  * 领域注册表：将通用工程范式（engine）+ 三角色 + 命令入口，映射到领域具体文件与描述。
  *
- * 内置领域（全部采用 loop 引擎范式，每个领域都有专属模板 enforce 各自纪律）：
+ * 内置领域（loop 引擎范式，每个领域都有专属模板 enforce 各自纪律）：
  *   ralph       → ralph-orchestrator / ralph-worker / ralph-reviewer / ralph-loop
  *                 内核范式：TaskList + 背压熔断（最通用，自定义领域无专属模板时回退到此）
  *   coding     → coding-orchestrator / coding-builder / coding-reviewer / coding-loop
@@ -10,6 +10,11 @@
  *                 测试领域：源码冻结铁律 + 三项信号（coverage/mutation/empty-assertion）
  *   writing     → writing-orchestrator / writing-author / writing-reviewer / writing-loop
  *                 写作领域：写作边界铁律 + 三项信号（术语/链接/示例）+ 弱门禁
+ *
+ * 内置领域（graph 引擎范式）：
+ *   graph       → graph-orchestrator / ralph-worker / ralph-reviewer / ralph-graph
+ *                 图路由范式：DAG 拓扑 + 激活节点集 + 背压熔断（内置示例 tasks，可基于此定制）
+ *                 executor/reviewer 复用 ralph 内核范式（ralph-graph.md 模板委派段硬编码）
  *
  * backpressure（断路器）是通用内核能力，所有内置领域默认携带：
  *   coding / testing / ralph → npm test, max_failures=3
@@ -21,13 +26,14 @@
  * 无 --domain 时回退到 ralph 内核范式。
  */
 
-import type { BackpressureConfig, EngineConfig } from "./domain-schema.js";
+import type { BackpressureConfig, EngineConfig, TaskDefinition } from "./domain-schema.js";
 
 export interface Domain {
   id: string;
   engine: EngineConfig;
   agents: { role: string; name: string; description: string; model?: string }[];
   commands: { kind: string; agent: string; name: string; description: string }[];
+  tasks?: TaskDefinition[];
   backpressure?: BackpressureConfig;
 }
 
@@ -178,6 +184,47 @@ export const DOMAINS: Record<string, Domain> = {
         name: "ralph-loop",
         description: "Ralph Loop 闭环命令。规划边界、委派执行者/审查者，按完成标准决定停止。",
       },
+    ],
+    backpressure: {
+      type: "test",
+      command: "npm test",
+      max_failures: 3,
+      retry_on_failure: true,
+    },
+  },
+  graph: {
+    id: "graph",
+    engine: { type: "graph" },
+    agents: [
+      {
+        role: "orchestrator",
+        name: "graph-orchestrator",
+        description: "Ralph Graph 主控 Agent。按预生成 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者，按背压熔断门禁决定停止。",
+      },
+      {
+        role: "executor",
+        name: "ralph-worker",
+        description: "Ralph Graph 执行者。在声明边界内完成 DAG 节点任务，运行验证，提交变更。",
+      },
+      {
+        role: "reviewer",
+        name: "ralph-reviewer",
+        description: "Ralph Graph 审查者。只读质量阀，输出可机器路由的 verdict/issues。",
+      },
+    ],
+    commands: [
+      {
+        kind: "entry",
+        agent: "graph-orchestrator",
+        name: "ralph-graph",
+        description: "Ralph Graph 闭环命令。按 DAG 路由表驱动激活节点集、委派执行者/审查者，按完成标准决定停止。",
+      },
+    ],
+    tasks: [
+      { id: "t1", title: "初始化环境与依赖", depends_on: [], accept_criteria: ["依赖安装完成", "环境可运行"] },
+      { id: "t2", title: "实现核心功能", depends_on: ["t1"], accept_criteria: ["核心逻辑实现", "单元测试覆盖"] },
+      { id: "t3", title: "编写测试用例", depends_on: ["t1"], accept_criteria: ["测试用例编写完成", "覆盖主路径"] },
+      { id: "t4", title: "集成与验证", depends_on: ["t2", "t3"], accept_criteria: ["集成测试通过", "验收标准达成"] },
     ],
     backpressure: {
       type: "test",

@@ -75,6 +75,17 @@ describe("validatePlatform", () => {
     assert.equal(result.totalExpected, 4);
   });
 
+  it("graph domain validates clean after generate (routing_table parity)", () => {
+    // 回归：validate 渲染 graph 命令时必须注入 routing_table，
+    // 否则刚生成的 ralph-graph.md 会因 {{routing_table}} 未替换而误报 stale。
+    generatePlatform("claude", { domain: "graph" });
+    const result = validatePlatform("claude", ".opencode/templates", "graph");
+    assert.ok(
+      result.clean,
+      `graph domain should validate clean right after generate, got: ${JSON.stringify(result.issues)}`,
+    );
+  });
+
   it("no-domain (ralph fallback) detects missing ralph-* files", () => {
     // 不生成任何文件，直接 validate，应当报 ralph-* missing
     const result = validatePlatform("claude");

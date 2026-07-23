@@ -138,6 +138,7 @@ export function renderCommandWithTemplates(
   commandTemplates: Record<string, string>,
   domainId?: string,
   engineType?: string,
+  tasks?: TaskDefinition[],
 ): RenderedCommand {
   const effectiveEngineType = engineType ?? ENGINE_TYPES[0];
   const tpl = pickCommandTemplate(commandTemplates, domainId, effectiveEngineType);
@@ -147,6 +148,10 @@ export function renderCommandWithTemplates(
     );
   const vars: Record<string, string> = { name: commandName, description, agent: agentName };
   if (domainId) vars.domain = domainId;
+  // routing_table 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
+  if (effectiveEngineType === "graph" && tasks) {
+    vars.routing_table = buildRoutingTable(tasks);
+  }
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
   const src: CommandSource = { name: commandName, description, frontmatter, body };
