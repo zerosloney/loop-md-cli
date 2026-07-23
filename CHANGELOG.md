@@ -8,11 +8,16 @@ All notable changes to this project are documented here.
 
 ## [0.6.1] - 2026-07-24
 
-自 v0.6.0 以来的改动：消除内置 graph 领域的回退警告噪音。
+自 v0.6.0 以来的改动：graph 领域恢复独立三角色 + 内核模板占位符化 + 回退警告噪音消除。
 
 ### Fixed
 
-- 内置 `graph` 领域生成时打印 4 条 `领域模板 ... 未找到，回退到 ralph-*` 警告。graph 领域刻意复用 ralph 内核模板（orchestrator 用 `{{engine_type}}` 区分，executor/reviewer 直接共享），回退是预期行为。`pickTemplate` / `pickCommandTemplate` 对内置领域（`domainId in DOMAINS`）不再告警，仅自定义领域保留警告以抓文件名拼写错误。
+- **graph 领域三角色混入 ralph**：v0.6.0 中 graph 领域的 executor/reviewer 复用了 `ralph-worker` / `ralph-reviewer`（因 `ralph-graph.md` 模板硬编码），导致生成结果缺少独立 graph 角色。根因修复：`ralph-loop.md` / `ralph-graph.md` 内核模板的委派 agent 名由硬编码改为 `{{executor_name}}` / `{{reviewer_name}}` 占位符，由领域定义按 role 动态注入。graph 领域恢复独立三角色：`graph-orchestrator` / `graph-worker` / `graph-reviewer`。
+- 内置 `graph` 领域生成时打印 4 条 `领域模板 ... 未找到，回退到 ralph-*` 警告。graph 领域复用 ralph 内核模板是预期行为。`pickTemplate` / `pickCommandTemplate` 对内置领域（`domainId in DOMAINS`）不再告警，仅自定义领域保留警告以抓文件名拼写错误。
+
+### Changed
+
+- `generatePlatform` / `renderCommandWithTemplates` 注入 `executor_name` / `reviewer_name` 变量（从领域 agents 按 role 查找）；`validate.ts` 同步传参，保持 generate/validate 一致性。
 
 ## [0.6.0] - 2026-07-23
 

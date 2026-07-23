@@ -795,10 +795,10 @@ describe("generatePlatform integration", () => {
     assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
     assert.ok(content.includes(`"entry_points"`), "should contain entry_points");
     assert.ok(content.includes(`"topological_order"`), "should contain topological_order");
-    // 内置 graph 领域复用 ralph-worker / ralph-reviewer（模板委派段硬编码）
+    // 内置 graph 领域拥有独立三角色 graph-orchestrator / graph-worker / graph-reviewer
     assert.ok(
-      content.includes("ralph-worker"),
-      "should reference ralph-worker for delegation (shared with ralph kernel)",
+      content.includes("graph-worker"),
+      "should reference graph-worker for delegation (independent graph domain)",
     );
   });
 

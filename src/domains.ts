@@ -12,9 +12,8 @@
  *                 写作领域：写作边界铁律 + 三项信号（术语/链接/示例）+ 弱门禁
  *
  * 内置领域（graph 引擎范式）：
- *   graph       → graph-orchestrator / ralph-worker / ralph-reviewer / ralph-graph
+ *   graph       → graph-orchestrator / graph-worker / graph-reviewer / ralph-graph
  *                 图路由范式：DAG 拓扑 + 激活节点集 + 背压熔断（内置示例 tasks，可基于此定制）
- *                 executor/reviewer 复用 ralph 内核范式（ralph-graph.md 模板委派段硬编码）
  *
  * backpressure（断路器）是通用内核能力，所有内置领域默认携带：
  *   coding / testing / ralph → npm test, max_failures=3
@@ -203,12 +202,12 @@ export const DOMAINS: Record<string, Domain> = {
       },
       {
         role: "executor",
-        name: "ralph-worker",
+        name: "graph-worker",
         description: "Ralph Graph 执行者。在声明边界内完成 DAG 节点任务，运行验证，提交变更。",
       },
       {
         role: "reviewer",
-        name: "ralph-reviewer",
+        name: "graph-reviewer",
         description: "Ralph Graph 审查者。只读质量阀，输出可机器路由的 verdict/issues。",
       },
     ],

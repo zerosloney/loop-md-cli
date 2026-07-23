@@ -132,6 +132,8 @@ export function validatePlatform(
   }
 
   const expectedCommands: RenderedCommand[] = [];
+  const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
+  const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
   for (const c of resolvedDomain.commands) {
     expectedCommands.push(
       renderCommandWithTemplates(
@@ -144,6 +146,8 @@ export function validatePlatform(
         renderDomainId,
         resolvedDomain.engine.type,
         resolvedDomain.tasks,
+        executorName,
+        reviewerName,
       ),
     );
   }

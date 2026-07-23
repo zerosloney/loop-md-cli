@@ -140,6 +140,8 @@ export function renderCommandWithTemplates(
   domainId?: string,
   engineType?: string,
   tasks?: TaskDefinition[],
+  executorName = "",
+  reviewerName = "",
 ): RenderedCommand {
   const effectiveEngineType = engineType ?? ENGINE_TYPES[0];
   const tpl = pickCommandTemplate(commandTemplates, domainId, effectiveEngineType);
@@ -149,6 +151,9 @@ export function renderCommandWithTemplates(
     );
   const vars: Record<string, string> = { name: commandName, description, agent: agentName };
   if (domainId) vars.domain = domainId;
+  // executor_name / reviewer_name 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
+  vars.executor_name = executorName;
+  vars.reviewer_name = reviewerName;
   // routing_table 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
   if (effectiveEngineType === "graph" && tasks) {
     vars.routing_table = buildRoutingTable(tasks);
@@ -430,6 +435,11 @@ export function generatePlatform(
     agent: c.agent,
   }));
 
+  // 按 role 查找 executor/reviewer 的 agent 名，供 command 模板的 {{executor_name}}/{{reviewer_name}} 注入。
+  // 内核范式模板（ralph-loop / ralph-graph）被多个领域共享回退，不能硬编码 worker/reviewer 名。
+  const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
+  const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
+
   for (const { engineType, key, description, agent } of commandEntries) {
     const tpl = pickCommandTemplate(commandTemplates, resolvedDomain.id, engineType);
     if (!tpl) {
@@ -439,6 +449,8 @@ export function generatePlatform(
     }
     const cmdVars: Record<string, string> = { name: key, description, agent };
     cmdVars.domain = resolvedDomain.id;
+    cmdVars.executor_name = executorName;
+    cmdVars.reviewer_name = reviewerName;
     if (engineType === "graph" && resolvedDomain.tasks) {
       cmdVars.routing_table = buildRoutingTable(resolvedDomain.tasks);
     }

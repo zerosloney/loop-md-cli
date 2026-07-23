@@ -93,13 +93,13 @@ DONE 必须同时满足：
 
 你拥有以下子代理工具，必须按流程调用：
 
-1. **ralph-worker** — 执行者，负责在 scope 内完成任务、运行验证
+1. **{{executor_name}}** — 执行者，负责在 scope 内完成任务、运行验证
    - 参数：
      - `description`: 简短任务描述（3-5个词）
      - `query`: 详细任务描述，包含当前任务、accept_criteria、已知上下文、验证命令等
      - `response_language`: "zh"
 
-2. **ralph-reviewer** — 审查者，负责只读审查、输出 verdict/issues
+2. **{{reviewer_name}}** — 审查者，负责只读审查、输出 verdict/issues
    - 参数：
      - `description`: 简短审查描述（3-5个词）
      - `query`: 详细审查要求，包含当前任务、accept_criteria、本轮变更、执行者产出等
@@ -112,9 +112,9 @@ DONE 必须同时满足：
 ```
 1. Orchestrator 从 active_set 中选择一个 pending 节点
 2. 标记该节点为 in_progress
-3. 调用 ralph-worker 执行任务
+3. 调用 {{executor_name}} 执行任务
 4. 等待 worker 完成并获取结果
-5. 调用 ralph-reviewer 审查产出
+5. 调用 {{reviewer_name}} 审查产出
 6. 根据 reviewer verdict 更新节点状态：
    - PASS → 标记 done，计算新的 active_set
    - NEEDS_FIX → 回 pending，failures += 1
@@ -137,7 +137,7 @@ DONE 必须同时满足：
 
 调用子代理时，必须注入完整的上下文信息：
 
-#### 给 ralph-worker 的上下文（对齐 ralph-executor 输入契约）：
+#### 给 {{executor_name}} 的上下文（对齐 executor 输入契约）：
 ```text
 === 目标 ===
 {goal}
@@ -159,7 +159,7 @@ accept_criteria:
 {round}
 ```
 
-#### 给 ralph-reviewer 的上下文（对齐 ralph-reviewer 输入契约）：
+#### 给 {{reviewer_name}} 的上下文（对齐 reviewer 输入契约）：
 ```text
 === 目标 ===
 {goal}
@@ -185,8 +185,8 @@ accept_criteria:
 每轮：
 1. 从 `active_set` 选一个 pending 节点（按 topological_order 优先）。
 2. 标记节点为 `in_progress`，写入状态文件。
-3. **调用 ralph-worker 工具**执行任务，注入完整上下文。
-4. 获取 worker 结果后，**调用 ralph-reviewer 工具**审查产出。
+3. **调用 {{executor_name}} 工具**执行任务，注入完整上下文。
+4. 获取 worker 结果后，**调用 {{reviewer_name}} 工具**审查产出。
 5. 根据审查者 verdict 与验证结果更新节点状态：
    - PASS → 节点 `done`，`consecutive_failures = 0`，按路由规则计算新 active_set。
    - NEEDS_FIX → 节点回 `pending`，`consecutive_failures += 1`，附 failure note。

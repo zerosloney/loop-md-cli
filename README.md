@@ -56,7 +56,7 @@ Four built-in domains, each with dedicated templates enforcing its own engineeri
 | Domain    | Agent names                                    | Command      | Discipline                                                                                                                          |
 | --------- | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop / ralph-graph | **Kernel paradigm**: TaskList-driven + backpressure breaker (loop); DAG routing + active-set execution (graph). Most general; fallback for custom domains without dedicated templates. |
-| `graph`   | graph-orchestrator / ralph-worker / ralph-reviewer | ralph-graph | **Graph paradigm**: DAG topology routing with a built-in example task graph (t1→t2/t3→t4). Use as a starting point for custom DAG domains. |
+| `graph`   | graph-orchestrator / graph-worker / graph-reviewer | ralph-graph | **Graph paradigm**: DAG topology routing with a built-in example task graph (t1→t2/t3→t4). Use as a starting point for custom DAG domains. |
 | `coding`  | coding-orchestrator / builder / reviewer       | coding-loop  | scope discipline + root-cause grouped fixes + zero tolerance for scope drift                                                        |
 | `testing` | test-orchestrator / writer / coverage-reviewer | test-loop    | source freeze + three signals (coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0)                                               |
 | `writing` | writing-orchestrator / author / reviewer       | writing-loop | writing boundary + three signals (terminology drift / dead links / code examples)                                                   |
@@ -153,6 +153,8 @@ You are **{{name}}**, the Loop executor agent.
 | `{{agent}}`        | orchestrator name the loop binds to           | command         |
 | `{{backpressure}}` | the domain's backpressure breaker config      | orchestrator    |
 | `{{engine_type}}`  | `engine.type` from the domain definition      | agent           |
+| `{{executor_name}}`| executor agent name (from domain, by role)    | command         |
+| `{{reviewer_name}}`| reviewer agent name (from domain, by role)    | command         |
 | `{{routing_table}}`| DAG topological sort + entry points (graph)   | command (graph)  |
 
 ### Built-in Domain Templates
