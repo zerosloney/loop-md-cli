@@ -6,6 +6,23 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-23
+
+自 v0.5.0 以来的改动：graph 引擎鲁棒性修复（拓扑环路检测、生成文件原子写入、模板回退警告、STALL 签名优化）。
+
+### Added
+
+- `buildRoutingTable` 拓扑排序后增加环路检测：若 Kahn 算法未覆盖全部节点则抛错（列出环上节点），避免静默生成不完整的 DAG 路由表。与 `domain-schema.ts` 的 schema 层 DFS 环检测形成纵深防御。
+- `incremental.ts` 新增 `writeAtomic` 原子写入 helper（`.tmp` → `rename`），全量生成循环、`applyChanges`、`saveManifest` 三处复用，防止写入中途崩溃导致单文件损坏。
+
+### Changed
+
+- `ralph-graph.md` STALL 签名由 `id:status` 扩展为 `id:status:failures`，纳入节点 `failures` 计数。区分"真停滞"与"Worker 反复失败仍在尝试"——后者 `failures` 递增使签名变化，避免 `stall_counter` 过快增长误判 STALL。
+
+### Fixed
+
+- 模板回退静默覆盖：`pickTemplate` / `pickCommandTemplate` 在领域专属模板缺失、回退到 `ralph-*` 内核范式时打印 `console.warn`（含期望文件名），便于用户定位文件名拼写错误。
+
 ## [0.5.0] - 2026-07-22
 
 自 v0.4.1 以来的改动。

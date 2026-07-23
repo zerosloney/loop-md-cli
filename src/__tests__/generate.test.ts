@@ -850,4 +850,22 @@ describe("buildRoutingTable", () => {
     );
     assert.deepEqual(table.nodes.a.accept_criteria, ["must pass tests"]);
   });
+
+  it("detects cycle a→b→a and throws (no silent incomplete routing table)", () => {
+    assert.throws(
+      () =>
+        buildRoutingTable([
+          { id: "a", title: "A", depends_on: ["b"] },
+          { id: "b", title: "B", depends_on: ["a"] },
+        ]),
+      /循环依赖/,
+    );
+  });
+
+  it("detects self-loop a→a and throws", () => {
+    assert.throws(
+      () => buildRoutingTable([{ id: "a", title: "A", depends_on: ["a"] }]),
+      /循环依赖/,
+    );
+  });
 });

@@ -17,7 +17,14 @@
  *
  * 只删 manifest 记录过的孤儿：用户手写、从未被工具生成的文件不会被触碰。
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  renameSync,
+} from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 
@@ -52,6 +59,19 @@ interface ManifestFile {
 /** 计算内容的 SHA-256 hex 摘要 */
 export function computeHash(content: string): string {
   return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+// ── 原子写入 ──
+
+/**
+ * 原子写入：先写 .tmp 再 rename，防止写入中途崩溃（磁盘满/进程被杀）导致目标文件损坏。
+ * .tmp 与目标同目录（必然同卷），rename 在 Win/POSIX 均原子。跨文件一致性由 manifest
+ * 事务保证（写中途 throw 不保存 manifest → 下次增量自愈），此处只补单文件损坏这一层。
+ */
+export function writeAtomic(fullPath: string, content: string): void {
+  const tmp = `${fullPath}.tmp`;
+  writeFileSync(tmp, content, "utf-8");
+  renameSync(tmp, fullPath);
 }
 
 // ── Manifest 读写 ──
@@ -91,7 +111,7 @@ export function saveManifest(platformKey: string, manifest: Manifest, cwd = proc
     mkdirSync(dir, { recursive: true });
   }
   const file: ManifestFile = { version: MANIFEST_VERSION, files: manifest };
-  writeFileSync(path, JSON.stringify(file, null, 2), "utf-8");
+  writeAtomic(path, JSON.stringify(file, null, 2));
 }
 
 // ── 变更检测 ──
@@ -162,7 +182,7 @@ export function applyChanges(changes: FileChange[], manifest: Manifest): number 
         if (!existsSync(dir)) {
           mkdirSync(dir, { recursive: true });
         }
-        writeFileSync(change.fullPath, change.content, "utf-8");
+        writeAtomic(change.fullPath, change.content);
         written++;
       } catch (err) {
         // 写入失败要可见，不能静默

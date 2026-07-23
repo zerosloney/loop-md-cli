@@ -8,7 +8,7 @@
  *   engine.type (= "loop" | "graph") → 决定 command 模板 lookup 域
  *   commands[].agent                 → 决定 command 模板里 {{agent}} 的取值
  */
-import { mkdirSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
+import { mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 import { PLATFORMS, type Family, type Platform } from "./platforms.js";
@@ -34,6 +34,7 @@ import {
   detectChanges,
   applyChanges,
   computeHash,
+  writeAtomic,
 } from "./incremental.js";
 import type { BackpressureConfig, ResolvedDomain, TaskDefinition } from "./domain-schema.js";
 
@@ -229,7 +230,12 @@ function pickTemplate(
     const specific = templates[`${domainId}-${role}`];
     if (specific) return specific;
   }
-  // 回退到 ralph-*（最通用的内核范式）
+  // 回退到 ralph-*（最通用的内核范式）。领域模板缺失通常是文件名拼写错误，给出可见警告便于定位。
+  if (domainId) {
+    console.warn(
+      `[loop-md] 领域模板 ${domainId}-${role} 未找到，回退到 ralph-${role} 内核范式`,
+    );
+  }
   const ralphFallback = templates[`ralph-${role}`];
   if (ralphFallback) return ralphFallback;
   return undefined;
@@ -247,7 +253,12 @@ function pickCommandTemplate(
     const specific = templates[`${domainId}-${engineType}`];
     if (specific) return specific;
   }
-  // 回退到 ralph-<engineType>（最通用的内核范式）
+  // 回退到 ralph-<engineType>（最通用的内核范式）。领域模板缺失通常是文件名拼写错误，给出可见警告便于定位。
+  if (domainId) {
+    console.warn(
+      `[loop-md] 领域模板 ${domainId}-${engineType} 未找到，回退到 ralph-${engineType} 内核范式`,
+    );
+  }
   const ralphFallback = templates[`ralph-${engineType}`];
   if (ralphFallback) return ralphFallback;
   return undefined;
@@ -285,6 +296,15 @@ export function buildRoutingTable(tasks: TaskDefinition[]): string {
       inDegree.set(next, newDeg);
       if (newDeg === 0) queue.push(next);
     }
+  }
+
+  // 环路检测：若拓扑序未覆盖全部节点，说明 depends_on 存在环。
+  // schema 层（domain-schema.ts）已有 DFS 兜底，此处是纵深防御，避免绕过校验直接调用时静默生成不完整路由表。
+  if (topologicalOrder.length !== tasks.length) {
+    const cyclic = tasks.filter((t) => !topologicalOrder.includes(t.id)).map((t) => t.id);
+    throw new Error(
+      `检测到循环依赖：tasks 中的 depends_on 存在环路（涉及节点：${cyclic.join(", ")}）`,
+    );
   }
 
   const entryPoints = tasks.filter((t) => !t.depends_on || t.depends_on.length === 0).map((t) => t.id);
@@ -451,7 +471,7 @@ export function generatePlatform(
   for (const [relativePath, content] of expectedFiles) {
     const path = join(base, relativePath);
     try {
-      writeFileSync(path, content, "utf-8");
+      writeAtomic(path, content);
     } catch (err) {
       throw new Error(`写入失败 ${path}: ${(err as Error).message}`, { cause: err });
     }
