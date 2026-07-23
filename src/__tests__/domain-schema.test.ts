@@ -573,6 +573,34 @@ describe("domain-schema validation", () => {
     );
   });
 
+  it("rejects accept_criteria that is not an array", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [{ id: "t1", title: "Task 1", depends_on: [], accept_criteria: "not-array" }],
+    });
+    assert.ok(
+      errors.some((e) => e.field === "tasks[0].accept_criteria" && e.message.includes("必须是数组")),
+    );
+  });
+
+  it("rejects accept_criteria with non-string elements", () => {
+    const errors = validateDomainFields({
+      id: "my-graph",
+      engine: { type: "graph" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-graph", description: "cmd" }],
+      tasks: [{ id: "t1", title: "Task 1", depends_on: [], accept_criteria: ["ok", 123] }],
+    });
+    assert.ok(
+      errors.some(
+        (e) => e.field === "tasks[0].accept_criteria[1]" && e.message.includes("非空字符串"),
+      ),
+    );
+  });
+
   it("rejects duplicate task IDs", () => {
     const errors = validateDomainFields({
       id: "my-graph",
@@ -690,5 +718,22 @@ describe("domain-schema validation", () => {
     assert.equal(domain.tasks, undefined);
     // cleanup
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("loop domain with tasks: validation passes, tasks parsed but generation ignores them", () => {
+    // 行为契约：loop 域携带 tasks 时不报错（结构校验仍生效），readDomainFile 正常解析，
+    // 但 generatePlatform 仅在 engineType=graph 时注入 routing_table，loop 域不会使用 tasks。
+    const errors = validateDomainFields({
+      id: "my-loop",
+      engine: { type: "loop" },
+      agents: [{ role: "orchestrator", name: "orchestrator", description: "main" }],
+      commands: [{ kind: "entry", agent: "orchestrator", name: "my-loop", description: "cmd" }],
+      tasks: [{ id: "t1", title: "Task 1", depends_on: [] }],
+    });
+    assert.equal(
+      errors.filter((e) => !e.field.startsWith(".")).length,
+      0,
+      `loop domain with valid tasks should pass validation: ${JSON.stringify(errors)}`,
+    );
   });
 });

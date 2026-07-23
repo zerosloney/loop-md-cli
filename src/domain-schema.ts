@@ -44,8 +44,6 @@ export interface TaskDefinition {
   accept_criteria?: string[];
 }
 
-
-
 export interface ResolvedDomain {
   id: string;
   engine: EngineConfig;
@@ -273,6 +271,20 @@ export function validateDomainFields(domain: unknown): FieldError[] {
                 errors.push({
                   field: `${prefix}.depends_on[${j}]`,
                   message: "必须是有效的任务 ID 字符串",
+                });
+              }
+            }
+          }
+        }
+        if (t.accept_criteria !== undefined) {
+          if (!Array.isArray(t.accept_criteria)) {
+            errors.push({ field: `${prefix}.accept_criteria`, message: "必须是数组" });
+          } else {
+            for (let j = 0; j < t.accept_criteria.length; j++) {
+              if (typeof t.accept_criteria[j] !== "string" || t.accept_criteria[j].trim() === "") {
+                errors.push({
+                  field: `${prefix}.accept_criteria[${j}]`,
+                  message: "必须是非空字符串",
                 });
               }
             }

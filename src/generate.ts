@@ -5,8 +5,8 @@
  * 支持增量模式：仅重写内容变化的文件。
  *
  * 概念分层：
- *   engine.type (= "loop") → 决定 command 模板 lookup 域
- *   commands[].agent       → 决定 command 模板里 {{agent}} 的取值
+ *   engine.type (= "loop" | "graph") → 决定 command 模板 lookup 域
+ *   commands[].agent                 → 决定 command 模板里 {{agent}} 的取值
  */
 import { mkdirSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -257,7 +257,7 @@ function pickCommandTemplate(
  * 构建图模式的 DAG 路由表 JSON 字符串。
  * 根据 tasks 定义计算 entry_points、topological_order（Kahn 算法）和节点映射。
  */
-function buildRoutingTable(tasks: TaskDefinition[]): string {
+export function buildRoutingTable(tasks: TaskDefinition[]): string {
   // 拓扑排序（Kahn 算法）
   const adj = new Map<string, string[]>();
   const inDegree = new Map<string, number>();
@@ -378,6 +378,7 @@ export function generatePlatform(
       name: key,
       description,
       backpressure: backpressureText,
+      engine_type: resolvedDomain.engine.type,
     };
     agentVars.domain = resolvedDomain.id;
     const rendered = renderTemplate(tpl, agentVars);

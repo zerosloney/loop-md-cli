@@ -11,7 +11,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { generatePlatform } from "../generate.js";
+import { generatePlatform, buildRoutingTable } from "../generate.js";
 import { PLATFORMS } from "../platforms.js";
 
 /** 每个测试在独立临时目录运行，彻底隔离。 */
@@ -783,5 +783,71 @@ describe("generatePlatform integration", () => {
       "should contain topological_order in routing table",
     );
     assert.ok(content.includes("active_set"), "should contain active_set in state schema");
+  });
+});
+
+// ─── buildRoutingTable 单测 ───
+
+describe("buildRoutingTable", () => {
+  it("single node: entry_points = [id], topological_order = [id]", () => {
+    const table = JSON.parse(buildRoutingTable([{ id: "a", title: "A" }]));
+    assert.deepEqual(table.entry_points, ["a"]);
+    assert.deepEqual(table.topological_order, ["a"]);
+    assert.deepEqual(table.nodes.a, { title: "A", depends_on: [], accept_criteria: [] });
+  });
+
+  it("linear chain a→b→c: topological order respects dependencies", () => {
+    const table = JSON.parse(
+      buildRoutingTable([
+        { id: "a", title: "A" },
+        { id: "b", title: "B", depends_on: ["a"] },
+        { id: "c", title: "C", depends_on: ["b"] },
+      ]),
+    );
+    assert.deepEqual(table.entry_points, ["a"]);
+    const order = table.topological_order as string[];
+    assert.ok(order.indexOf("a") < order.indexOf("b"));
+    assert.ok(order.indexOf("b") < order.indexOf("c"));
+  });
+
+  it("diamond DAG: a→b,c→d", () => {
+    const table = JSON.parse(
+      buildRoutingTable([
+        { id: "a", title: "A" },
+        { id: "b", title: "B", depends_on: ["a"] },
+        { id: "c", title: "C", depends_on: ["a"] },
+        { id: "d", title: "D", depends_on: ["b", "c"] },
+      ]),
+    );
+    assert.deepEqual(table.entry_points, ["a"]);
+    const order = table.topological_order as string[];
+    assert.equal(order.length, 4);
+    assert.ok(order.indexOf("a") < order.indexOf("b"));
+    assert.ok(order.indexOf("a") < order.indexOf("c"));
+    assert.ok(order.indexOf("b") < order.indexOf("d"));
+    assert.ok(order.indexOf("c") < order.indexOf("d"));
+  });
+
+  it("disconnected components: multiple entry points", () => {
+    const table = JSON.parse(
+      buildRoutingTable([
+        { id: "x", title: "X" },
+        { id: "y", title: "Y" },
+        { id: "z", title: "Z", depends_on: ["x"] },
+      ]),
+    );
+    assert.deepEqual(table.entry_points.sort(), ["x", "y"]);
+    const order = table.topological_order as string[];
+    assert.equal(order.length, 3);
+    assert.ok(order.indexOf("x") < order.indexOf("z"));
+  });
+
+  it("preserves accept_criteria in nodes", () => {
+    const table = JSON.parse(
+      buildRoutingTable([
+        { id: "a", title: "A", accept_criteria: ["must pass tests"] },
+      ]),
+    );
+    assert.deepEqual(table.nodes.a.accept_criteria, ["must pass tests"]);
   });
 });
