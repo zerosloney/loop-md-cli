@@ -64,6 +64,7 @@ function printHelp(): void {
     "  --dry-run, -n           演练模式，不实际写入文件",
     "  --domain, -d <id>       使用指定领域（builtin: ralph, graph, coding, testing, writing；默认 ralph）",
     "  --domain-file, -D <path> 自定义领域文件路径（JSON）",
+    "  --tasks-file, -t <path>  外部 tasks DAG 文件（JSON），注入 graph 领域的路由表",
     "",
     "模型选项（通用，可选，不填则子 agent 继承主会话模型）:",
     '  --model-orchestrator <name>  编排者模型，如 "DeepSeek-V4-Pro"',
@@ -116,6 +117,7 @@ interface Args {
   dryRun: boolean;
   domains: string[];
   domainFiles: string[];
+  tasksFile?: string;
   picked: string[];
   modelOverrides: Record<string, string>;
 }
@@ -171,6 +173,9 @@ function parseArgs(argv: string[]): Args {
     } else if ((tok === "--domain-file" || tok === "-D") && i + 1 < argv.length) {
       args.domainFiles.push(argv[i + 1]);
       i++;
+    } else if ((tok === "--tasks-file" || tok === "-t") && i + 1 < argv.length) {
+      args.tasksFile = argv[i + 1];
+      i++;
     } else if (tok === "--model-orchestrator" && i + 1 < argv.length) {
       args.modelOverrides["orchestrator"] = argv[i + 1];
       i++;
@@ -221,6 +226,7 @@ function interactiveSelect(
   dryRun: boolean,
   domains: string[] = [],
   domainFiles: string[] = [],
+  tasksFile?: string,
   incremental = false,
   modelOverrides: Record<string, string> = {},
 ): void {
@@ -267,7 +273,7 @@ function interactiveSelect(
     finish(picked);
   });
   function finish(selected: string[]): never {
-    runGenerate(selected, dryRun, domains, domainFiles, incremental, modelOverrides);
+    runGenerate(selected, dryRun, domains, domainFiles, tasksFile, incremental, modelOverrides);
     process.exit(0);
   }
 }
@@ -287,6 +293,7 @@ function runGenerate(
   dryRun: boolean,
   domains: string[] = [],
   domainFiles: string[] = [],
+  tasksFile?: string,
   incremental = false,
   modelOverrides: Record<string, string> = {},
 ): void {
@@ -306,6 +313,7 @@ function runGenerate(
       dryRun,
       domains,
       domainFiles,
+      tasksFile,
       incremental,
       modelOverrides,
     });
@@ -322,10 +330,10 @@ function runGenerate(
   console.log("\n完成。修改 agents/ 或 commands/ 后重跑同步。");
 }
 
-function runValidate(selected: string[], domains: string[] = [], domainFiles: string[] = []): number {
+function runValidate(selected: string[], domains: string[] = [], domainFiles: string[] = [], tasksFile?: string): number {
   let totalIssues = 0;
   for (const key of selected) {
-    const result = validatePlatform(key, ".opencode/templates", domains, domainFiles);
+    const result = validatePlatform(key, ".opencode/templates", domains, domainFiles, process.cwd(), tasksFile);
     console.log(formatValidateResult(result));
     totalIssues += result.issueCount;
     console.log("");
@@ -374,7 +382,7 @@ function runCommand(args: Args, domainIds: string[]): void {
       console.error("错误: --validate 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const totalIssues = runValidate(selected, domainIds, args.domainFiles);
+    const totalIssues = runValidate(selected, domainIds, args.domainFiles, args.tasksFile);
     if (totalIssues > 0) {
       console.error(`\n验证失败: 发现 ${totalIssues} 个问题。请运行 loop-md-cli --all 重新生成。`);
       process.exit(1);
@@ -393,7 +401,7 @@ function runCommand(args: Args, domainIds: string[]): void {
       console.error("错误: --watch 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const cleanup = startWatch(selected, domainIds, args.domainFiles, undefined, args.incremental);
+    const cleanup = startWatch(selected, domainIds, args.domainFiles, undefined, args.incremental, args.tasksFile);
     process.on("SIGINT", () => {
       console.log("\n👋 监听已停止。");
       cleanup();
@@ -412,7 +420,7 @@ function runCommand(args: Args, domainIds: string[]): void {
       console.error("错误: --archive 需要指定平台（--all 或 --<platform>）。");
       process.exit(1);
     }
-    const result = exportArchive(selected, args.archive, domainIds, args.domainFiles);
+    const result = exportArchive(selected, args.archive, domainIds, args.domainFiles, args.tasksFile);
     console.log(
       `📦 已导出 ${result.fileCount} 个文件 (${result.platformCount} 个平台) → ${result.filePath}`,
     );
@@ -429,6 +437,7 @@ function runCommand(args: Args, domainIds: string[]): void {
       args.dryRun,
       domainIds,
       args.domainFiles,
+      args.tasksFile,
       args.incremental,
       args.modelOverrides,
     );
@@ -439,6 +448,7 @@ function runCommand(args: Args, domainIds: string[]): void {
     args.dryRun,
     domainIds,
     args.domainFiles,
+    args.tasksFile,
     args.incremental,
     args.modelOverrides,
   );

@@ -37,7 +37,7 @@ import {
   computeHash,
   writeAtomic,
 } from "./incremental.js";
-import type { BackpressureConfig, ResolvedDomain, TaskDefinition } from "./domain-schema.js";
+import { validateDomainFields, type BackpressureConfig, type ResolvedDomain, type TaskDefinition } from "./domain-schema.js";
 
 const DEFAULT_TEMPLATES_ROOT = ".opencode/templates";
 
@@ -113,6 +113,35 @@ export function renderAgentWithTemplates(
   return { name: agentName, content };
 }
 
+/**
+ * 填充 graph 引擎的双分支变量（静态路由表 / 动态分解）。
+ * generatePlatform 和 renderCommandWithTemplates 共用此逻辑，保证写盘与 validate 比对一致。
+ * @param vars 模板变量 map（原地修改）
+ * @param tasks 有效的 tasks（领域声明或 --tasks-file 注入）；空/undefined 走动态分支
+ */
+function fillGraphDagSections(vars: Record<string, string>, tasks?: TaskDefinition[]): void {
+  if (tasks && tasks.length > 0) {
+    const table = buildRoutingTable(tasks);
+    vars.routing_table = table;
+    vars.routing_table_section =
+      `本领域已预定义 DAG 拓扑，路由表如下（由 CLI 在生成时计算）：\n\n` +
+      "```json\n" + table + "\n```\n\n" +
+      "- **entry_points**: 拓扑入口节点（无依赖，可立即执行）。\n" +
+      "- **topological_order**: 拓扑排序，用于确定激活节点集的推进方向。\n" +
+      "- 每个节点记录 `depends_on`（前置依赖）和 `accept_criteria`（验收标准）。";
+    vars.dynamic_dag_section = "";
+  } else {
+    vars.routing_table_section = "";
+    vars.dynamic_dag_section =
+      "本命令未预定义静态路由表（动态模式）。请在初始化阶段从 `$ARGUMENTS` 自行分解任务为 DAG 节点：\n\n" +
+      "1. 将请求拆解为若干任务节点，每个节点含 `id`（如 t1/t2）、`title`、`depends_on`（前置节点 id 数组）、`accept_criteria`（验收标准数组）。\n" +
+      "2. 识别无依赖的节点作为 `entry_points`。\n" +
+      "3. 按 depends_on 关系计算 `topological_order`（拓扑排序）。\n" +
+      "4. 将分解结果写入状态文件的 `nodes` 映射，格式与下方状态持久化 schema 一致。\n\n" +
+      "> 分解质量直接影响执行效率：优先识别可并行的独立任务，依赖链尽量短。";
+  }
+}
+
 /** 内部：用预加载模板渲染 command，供 validate.ts 复用避免重复读盘。 */
 export function renderCommandWithTemplates(
   renderer: Renderer,
@@ -138,9 +167,10 @@ export function renderCommandWithTemplates(
   // executor_name / reviewer_name 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
   vars.executor_name = executorName;
   vars.reviewer_name = reviewerName;
-  // routing_table 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
-  if (effectiveEngineType === "graph" && tasks) {
-    vars.routing_table = buildRoutingTable(tasks);
+  // graph 引擎双分支：有 tasks 走静态路由表，无 tasks 走动态分解。
+  // 必须与 renderDomainFiles 写盘路径一致，否则 validate 比对会误报 stale。
+  if (effectiveEngineType === "graph") {
+    fillGraphDagSections(vars, tasks);
   }
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
@@ -266,6 +296,45 @@ function pickCommandTemplate(
 }
 
 /**
+ * 读取 --tasks-file 指定的外部 tasks JSON，返回 TaskDefinition[]。
+ * 支持两种格式：裸数组 [{id,title,...}] 或包裹对象 {tasks: [...]}。
+ * 复用 domain-schema 的校验逻辑（环路检测、字段校验）确保拓扑合法。
+ */
+export function readTasksFile(path: string): TaskDefinition[] {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch (err) {
+    throw new Error(`无法读取 tasks 文件 ${path}: ${(err as Error).message}`, { cause: err });
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`tasks 文件 JSON 解析失败 (${path}): ${(err as Error).message}`, { cause: err });
+  }
+  // 兼容裸数组或 {tasks: [...]}
+  const arr = Array.isArray(json) ? json : (json as { tasks?: unknown[] })?.tasks;
+  if (!Array.isArray(arr) || arr.length === 0) {
+    throw new Error(`tasks 文件 (${path}) 必须是任务数组或 {tasks: [...]}，且非空`);
+  }
+  // 构造临时领域对象，复用 domain-schema 的校验（含环路检测）
+  const tmpDomain = { id: "__tasks_file__", engine: { type: "graph" as const }, agents: [], commands: [], tasks: arr };
+  const errors = validateDomainFields(tmpDomain);
+  const taskErrors = errors.filter((e) => e.field.startsWith("tasks"));
+  if (taskErrors.length > 0) {
+    const msg = taskErrors.map((e) => `  ${e.field}: ${e.message}`).join("\n");
+    throw new Error(`tasks 文件校验失败 (${path}):\n${msg}`);
+  }
+  return (arr as Record<string, unknown>[]).map((t) => ({
+    id: t.id as string,
+    title: t.title as string,
+    depends_on: Array.isArray(t.depends_on) ? (t.depends_on as string[]) : undefined,
+    accept_criteria: Array.isArray(t.accept_criteria) ? (t.accept_criteria as string[]) : undefined,
+  }));
+}
+
+/**
  * 构建图模式的 DAG 路由表 JSON 字符串。
  * 根据 tasks 定义计算 entry_points、topological_order（Kahn 算法）和节点映射。
  */
@@ -336,6 +405,8 @@ export interface GenerateOptions {
   domains?: string[];
   /** 额外自定义领域文件路径（JSON）。 */
   domainFiles?: string[];
+  /** 外部 tasks 文件路径（JSON），注入 graph 领域的 DAG（覆盖内置）。 */
+  tasksFile?: string;
   /** 增量生成：仅重写内容变化的文件（默认 false）。 */
   incremental?: boolean;
   /** 跳过同名文件已存在的领域（默认 true）。预检发现任一目标文件已存在则跳过整个领域。 */
@@ -357,6 +428,7 @@ function renderDomainFiles(
   renderer: Renderer,
   platform: Platform,
   modelOverrides?: Record<string, string>,
+  tasksOverride?: TaskDefinition[],
 ): { files: Map<string, string>; agents: number; commands: number } {
   const files = new Map<string, string>();
   let agentCount = 0;
@@ -407,8 +479,9 @@ function renderDomainFiles(
     cmdVars.domain = resolvedDomain.id;
     cmdVars.executor_name = executorName;
     cmdVars.reviewer_name = reviewerName;
-    if (engineType === "graph" && resolvedDomain.tasks) {
-      cmdVars.routing_table = buildRoutingTable(resolvedDomain.tasks);
+    // graph 引擎：有 tasks（领域声明或 --tasks-file 注入）走静态路由表；无 tasks 走动态分解。
+    if (engineType === "graph") {
+      fillGraphDagSections(cmdVars, tasksOverride ?? resolvedDomain.tasks);
     }
     const rendered = renderTemplate(tpl, cmdVars);
     const { frontmatter, body } = parseSource(rendered);
@@ -431,6 +504,7 @@ export function generatePlatform(
     domain,
     domains = [],
     domainFiles = [],
+    tasksFile,
     incremental = false,
     skipIfExists = true,
     cwd = process.cwd(),
@@ -457,6 +531,12 @@ export function generatePlatform(
   const domainIds = [...new Set([...(domain ? [domain] : []), ...domains])];
   const effectiveDomainIds = domainIds.length > 0 ? domainIds : [DEFAULT_DOMAIN_ID];
 
+  // --tasks-file：读取外部 tasks JSON，注入到 graph 领域的 DAG（覆盖领域内置 tasks）。
+  let tasksOverride: TaskDefinition[] | undefined;
+  if (tasksFile) {
+    tasksOverride = readTasksFile(tasksFile);
+  }
+
   // 收集所有预期文件（跨领域合并到同一 map，孤儿清理只删"所有领域都不需要"的文件）
   const expectedFiles = new Map<string, string>();
   let agentCount = 0;
@@ -471,6 +551,7 @@ export function generatePlatform(
       renderer,
       platform,
       modelOverrides,
+      tasksOverride,
     );
 
     // 预检：任一目标文件已存在 → 跳过整个领域（不覆盖）。

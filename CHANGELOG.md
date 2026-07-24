@@ -6,6 +6,22 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-24
+
+自 v0.7.0 以来的改动：graph 引擎动态 DAG —— 单模板自动切换静态/动态双模式。
+
+### Added
+
+- **动态 DAG 模式**：内置 `graph` 领域去掉静态 tasks，默认走动态模式。生成的 `ralph-graph.md` 命令文件含动态分解指令——AI 运行时从 `$ARGUMENTS` 自行拆解任务为 DAG 节点（id/title/depends_on/accept_criteria），计算 entry_points 和 topological_order。零配置即可用，适配任意运行时任务。
+- **`--tasks-file` 参数**（`-t`）：传入外部 tasks JSON（裸数组或 `{tasks: [...]}`），注入 graph 领域生成精确静态路由表。复用 `domain-schema` 的环路检测和字段校验。适用于项目专属 DAG 场景。
+- 双模式自动切换：同一个 `ralph-graph.md` 模板，有 tasks（领域声明或 `--tasks-file`）→ 静态路由表分支；无 tasks → 动态分解分支。由 `fillGraphDagSections` 共享 helper 填充 `routing_table_section` / `dynamic_dag_section` 占位符。
+
+### Changed
+
+- 内置 `graph` 领域不再内置示例 tasks（t1→t2/t3→t4）。改为纯动态模式——开箱即用时 AI 运行时分解；想要静态拓扑用 `--tasks-file` 或自定义 domain JSON。
+- `generatePlatform` / `validatePlatform` / `startWatch` / `exportArchive` 新增 `tasksFile?` 参数透传；`renderCommandWithTemplates` 双分支填充与 `renderDomainFiles` 共用 `fillGraphDagSections`。
+- `readTasksFile` 导出，供 validate 复用（保证 generate/validate 一致）。
+
 ## [0.7.0] - 2026-07-24
 
 自 v0.6.1 以来的改动：支持多领域共存生成 + 同名预检跳过。
@@ -159,7 +175,8 @@ All notable changes to this project are documented here.
 
 - 初始发布（loop-forge）：多平台 AI agent/command 配置生成器。
 
-[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/master0071/loop-md-cli/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/master0071/loop-md-cli/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/master0071/loop-md-cli/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/master0071/loop-md-cli/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/master0071/loop-md-cli/compare/v0.5.1...v0.6.0

@@ -57,7 +57,7 @@ Four built-in domains, each with dedicated templates enforcing its own engineeri
 | Domain    | Agent names                                    | Command      | Discipline                                                                                                                          |
 | --------- | ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `ralph`   | ralph-orchestrator / worker / reviewer         | ralph-loop / ralph-graph | **Kernel paradigm**: TaskList-driven + backpressure breaker (loop); DAG routing + active-set execution (graph). Most general; fallback for custom domains without dedicated templates. |
-| `graph`   | graph-orchestrator / graph-worker / graph-reviewer | ralph-graph | **Graph paradigm**: DAG topology routing with a built-in example task graph (t1→t2/t3→t4). Use as a starting point for custom DAG domains. |
+| `graph`   | graph-orchestrator / graph-worker / graph-reviewer | ralph-graph | **Graph paradigm**: DAG routing with active-set execution. Dynamic mode by default (AI decomposes at runtime); static via `--tasks-file`. |
 | `coding`  | coding-orchestrator / builder / reviewer       | coding-loop  | scope discipline + root-cause grouped fixes + zero tolerance for scope drift                                                        |
 | `testing` | test-orchestrator / writer / coverage-reviewer | test-loop    | source freeze + three signals (coverage ≥ 80% / mutation ≥ 60% / empty-assertion = 0)                                               |
 | `writing` | writing-orchestrator / author / reviewer       | writing-loop | writing boundary + three signals (terminology drift / dead links / code examples)                                                   |
@@ -82,7 +82,17 @@ The JSON requires `engine: { type: "loop" }` or `engine: { type: "graph" }`. The
 
 #### Graph Engine
 
-A built-in `graph` domain is ready to use out of the box (`--domain graph`); the example below shows how to define a **custom** graph domain with your own task DAG:
+The built-in `graph` domain runs in **dynamic mode** by default — the generated command instructs the orchestrator to decompose `$ARGUMENTS` into a DAG at runtime (zero config). For a **static** routing table, use `--tasks-file`:
+
+```bash
+# Dynamic (default): AI decomposes the task at runtime
+loop-md-cli --kilo --domain graph
+
+# Static: inject a project-specific DAG from a JSON file
+loop-md-cli --kilo --domain graph --tasks-file ./my-tasks.json
+```
+
+The tasks file is a JSON array (`[{id, title, depends_on, accept_criteria}]`) or `{tasks: [...]}`. The CLI computes the topological sort and injects a routing table. The example below shows how to define a **custom** graph domain with your own task DAG (team-shared):
 
 ```json
 {
@@ -260,6 +270,7 @@ approvalMode: plan
 | `--dry-run`            | `-n`        | Dry run, write nothing                                                       |
 | `--domain`             | `-d`        | Use the given domain (repeatable: `-d ralph -d graph`)                      |
 | `--domain-file`        | `-D`        | Path to a custom domain file                                                 |
+| `--tasks-file`         | `-t`        | External tasks DAG file (JSON), injects a static routing table for graph     |
 | `--model-orchestrator` | —           | Orchestrator sub-agent model (e.g. `--model-orchestrator "DeepSeek-V4-Pro"`) |
 | `--model-executor`     | —           | Executor sub-agent model                                                     |
 | `--model-reviewer`     | —           | Reviewer sub-agent model                                                     |

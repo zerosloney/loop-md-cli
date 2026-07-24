@@ -198,7 +198,7 @@ export const DOMAINS: Record<string, Domain> = {
       {
         role: "orchestrator",
         name: "graph-orchestrator",
-        description: "Ralph Graph 主控 Agent。按预生成 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者，按背压熔断门禁决定停止。",
+        description: "Ralph Graph 主控 Agent。按 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者，按背压熔断门禁决定停止。",
       },
       {
         role: "executor",
@@ -219,12 +219,8 @@ export const DOMAINS: Record<string, Domain> = {
         description: "Ralph Graph 闭环命令。按 DAG 路由表驱动激活节点集、委派执行者/审查者，按完成标准决定停止。",
       },
     ],
-    tasks: [
-      { id: "t1", title: "初始化环境与依赖", depends_on: [], accept_criteria: ["依赖安装完成", "环境可运行"] },
-      { id: "t2", title: "实现核心功能", depends_on: ["t1"], accept_criteria: ["核心逻辑实现", "单元测试覆盖"] },
-      { id: "t3", title: "编写测试用例", depends_on: ["t1"], accept_criteria: ["测试用例编写完成", "覆盖主路径"] },
-      { id: "t4", title: "集成与验证", depends_on: ["t2", "t3"], accept_criteria: ["集成测试通过", "验收标准达成"] },
-    ],
+    // 无内置 tasks：默认纯动态模式，AI 运行时从 $ARGUMENTS 自行分解 DAG。
+    // 想要静态拓扑用 --tasks-file 或自定义 domain JSON 声明 tasks。
     backpressure: {
       type: "test",
       command: "npm test",

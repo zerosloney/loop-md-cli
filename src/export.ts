@@ -72,6 +72,7 @@ export function exportArchive(
   output: string,
   domains: string[] = [],
   domainFiles: string[] = [],
+  tasksFile?: string,
   cwd = process.cwd(),
 ): ExportResult {
   if (!output.endsWith(".zip")) output += ".zip";
@@ -84,7 +85,7 @@ export function exportArchive(
     copyDir(join(cwd, ".opencode", "domains"), join(tmpBase, ".opencode", "domains"));
 
     for (const key of platforms) {
-      generatePlatform(key, { domains, domainFiles, cwd: tmpBase });
+      generatePlatform(key, { domains, domainFiles, cwd: tmpBase, tasksFile });
     }
 
     // 收集文件

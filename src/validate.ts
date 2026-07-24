@@ -18,6 +18,7 @@ import { loadAgentTemplates, loadCommandTemplates, loadTemplateFiles } from "./t
 import {
   renderAgentWithTemplates,
   renderCommandWithTemplates,
+  readTasksFile,
   RENDERERS,
   renderBackpressure,
   type RenderedAgent,
@@ -84,6 +85,7 @@ export function validatePlatform(
   domains?: string | string[],
   domainFiles: string[] = [],
   cwd = process.cwd(),
+  tasksFile?: string,
 ): ValidateResult {
   const platform: Platform = PLATFORMS[platformKey];
   if (!platform) throw new Error(`未知平台: ${platformKey}`);
@@ -96,6 +98,10 @@ export function validatePlatform(
   // domains 支持单字符串（向后兼容）或数组；都为空时回退 ralph 内核范式
   const domainList = Array.isArray(domains) ? domains : domains ? [domains] : [];
   const effectiveDomainIds = domainList.length > 0 ? domainList : [DEFAULT_DOMAIN_ID];
+
+  // --tasks-file：与 generatePlatform 同样的解析逻辑，保证 validate 比对一致。
+  // 读取失败时抛错——与 generate 阶段一致，不静默吞。
+  const tasksOverride = tasksFile ? readTasksFile(tasksFile) : undefined;
 
   // ── 加载模板（一次加载，避免 loops 内重复读盘） ──
   const renderer = RENDERERS[platform.family];
@@ -138,6 +144,8 @@ export function validatePlatform(
 
     const executorName = resolvedDomain.agents.find((a) => a.role === "executor")?.name ?? "";
     const reviewerName = resolvedDomain.agents.find((a) => a.role === "reviewer")?.name ?? "";
+    // 与 generatePlatform 一致：--tasks-file 注入优先于领域内置 tasks
+    const effectiveTasks = tasksOverride ?? resolvedDomain.tasks;
     for (const c of resolvedDomain.commands) {
       expectedCommands.push(
         renderCommandWithTemplates(
@@ -149,7 +157,7 @@ export function validatePlatform(
           commandTemplates,
           renderDomainId,
           resolvedDomain.engine.type,
-          resolvedDomain.tasks,
+          effectiveTasks,
           executorName,
           reviewerName,
         ),

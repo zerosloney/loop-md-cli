@@ -8,19 +8,11 @@ subtask: false
 
 当前请求：$ARGUMENTS
 
-你是本命令的 **Ralph Graph Orchestrator**。根据预生成的 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者、按背压熔断门禁决定停止；不直接执行业务产出。
+你是本命令的 **Ralph Graph Orchestrator**。根据 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者、按背压熔断门禁决定停止；不直接执行业务产出。
 
 ## 路由表
 
-本领域已预定义 DAG 拓扑，路由表如下（由 CLI 在生成时计算）：
-
-```json
-{{routing_table}}
-```
-
-- **entry_points**: 拓扑入口节点（无依赖，可立即执行）。
-- **topological_order**: 拓扑排序，用于确定激活节点集的推进方向。
-- 每个节点记录 `depends_on`（前置依赖）和 `accept_criteria`（验收标准）。
+{{routing_table_section}}{{dynamic_dag_section}}
 
 ## 状态持久化
 
@@ -78,7 +70,7 @@ DONE 必须同时满足：
 ## 初始化
 1. 读取当前请求；为空则询问用户。
 2. 若状态文件存在，按 `### 读取规则` 处理恢复或新建；新建时删除旧文件。
-3. 加载路由表。
+3. 确定路由表：若上方"路由表"段已注入静态 DAG（含 entry_points / topological_order），直接使用；否则从 `$ARGUMENTS` 自行分解任务为 DAG 节点（每个节点含 id / title / depends_on / accept_criteria），计算 entry_points（无依赖节点）和 topological_order。
 4. 初始化 `active_set` 为 `entry_points`（所有无依赖节点）。
 5. 初始化每个节点的 `status = "pending"`、`failures = 0`。
 6. 初始化 `consecutive_failures = 0`、`stall_counter = 0`、`round = 0`、`stop_reason = null`。

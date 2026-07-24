@@ -18,12 +18,13 @@ describe("domain-loader", () => {
     assert.ok(ids.includes("graph"));
   });
 
-  it("finds builtin graph domain with tasks DAG", () => {
+  it("finds builtin graph domain (dynamic, no tasks)", () => {
     const domains = resolveDomains();
     const d = findDomain(domains, "graph");
     assert.equal(d.id, "graph");
     assert.equal(d.engine.type, "graph");
-    assert.ok(d.tasks && d.tasks.length > 0, "graph domain must define tasks");
+    // 内置 graph 领域是纯动态模式（无 tasks），tasks 由 --tasks-file 或运行时 AI 分解提供
+    assert.ok(!d.tasks || d.tasks.length === 0, "builtin graph domain should have no static tasks");
     assert.ok(d.commands.some((c) => c.name === "ralph-graph"), "graph domain must emit ralph-graph command");
   });
 

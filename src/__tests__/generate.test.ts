@@ -785,7 +785,8 @@ describe("generatePlatform integration", () => {
     assert.ok(content.includes("active_set"), "should contain active_set in state schema");
   });
 
-  it("builtin graph domain generates ralph-graph command with routing table", () => {
+  it("builtin graph domain generates dynamic DAG command (no static tasks)", () => {
+    // 内置 graph 领域无 tasks，走动态模式：命令文件含动态分解指令，不含静态路由表 JSON。
     const result = generatePlatform("claude", { domain: "graph" });
     assert.equal(result.commands, 1, "should generate exactly 1 command");
     const commandDir = join(tmpDir, ".claude", "commands");
@@ -793,13 +794,34 @@ describe("generatePlatform integration", () => {
     assert.ok(commandFiles.includes("ralph-graph.md"), "should generate ralph-graph.md command");
     const content = readFileSync(join(commandDir, "ralph-graph.md"), "utf-8");
     assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
-    assert.ok(content.includes(`"entry_points"`), "should contain entry_points");
-    assert.ok(content.includes(`"topological_order"`), "should contain topological_order");
+    // 动态模式特征：含动态分解指令，不含静态 entry_points JSON
+    assert.ok(content.includes("动态模式"), "should contain dynamic mode instruction");
+    assert.ok(!content.includes(`"entry_points"`), "should NOT contain static routing table");
     // 内置 graph 领域拥有独立三角色 graph-orchestrator / graph-worker / graph-reviewer
     assert.ok(
       content.includes("graph-worker"),
       "should reference graph-worker for delegation (independent graph domain)",
     );
+  });
+
+  it("graph domain with --tasks-file generates static routing table", () => {
+    // --tasks-file 注入外部 DAG，走静态路由表模式。
+    const tasksFile = join(tmpDir, "my-tasks.json");
+    writeFileSync(
+      tasksFile,
+      JSON.stringify([
+        { id: "a", title: "Task A", depends_on: [] },
+        { id: "b", title: "Task B", depends_on: ["a"] },
+      ]),
+    );
+    const result = generatePlatform("claude", { domain: "graph", tasksFile });
+    assert.equal(result.commands, 1);
+    const content = readFileSync(join(tmpDir, ".claude", "commands", "ralph-graph.md"), "utf-8");
+    assert.ok(content.includes(`"entry_points"`), "should contain static entry_points");
+    assert.ok(content.includes(`"topological_order"`), "should contain topological_order");
+    assert.ok(content.includes('"a"'), "should contain task a in routing table");
+    assert.ok(content.includes('"b"'), "should contain task b in routing table");
+    assert.ok(!content.includes("动态模式"), "should NOT contain dynamic mode when tasks-file present");
   });
 
   it("builtin domains do not emit fallback warnings (expected reuse)", () => {

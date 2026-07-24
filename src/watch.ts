@@ -59,9 +59,10 @@ export function startWatch(
   domainFiles: string[] = [],
   cwd = process.cwd(),
   incremental = false,
+  tasksFile?: string,
 ): () => void {
   const debouncer = new Debouncer(() => {
-    runGeneration(platforms, domains, domainFiles, cwd, incremental);
+    runGeneration(platforms, domains, domainFiles, cwd, incremental, tasksFile);
   }, 300);
 
   const watchers: FSWatcher[] = [];
@@ -101,7 +102,7 @@ export function startWatch(
   console.log(`   模式: ${modeLabel}`);
   if (domains.length > 0) console.log(`   领域: ${domains.join(", ")}`);
   console.log("   按 Ctrl+C 退出\n");
-  runGeneration(platforms, domains, domainFiles, cwd, incremental);
+  runGeneration(platforms, domains, domainFiles, cwd, incremental, tasksFile);
 
   // 返回清理函数
   return () => {
@@ -128,6 +129,7 @@ function runGeneration(
   domainFiles: string[],
   cwd: string,
   incremental: boolean,
+  tasksFile?: string,
 ): void {
   for (const key of platforms) {
     const { agents, commands, written } = generatePlatform(key, {
@@ -135,6 +137,7 @@ function runGeneration(
       domainFiles,
       incremental,
       cwd,
+      tasksFile,
       // watch 模式下重新生成必须覆盖（模板/领域文件变了就该重写），不能因文件已存在而跳过。
       skipIfExists: false,
     });
