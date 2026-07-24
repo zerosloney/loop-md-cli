@@ -6,6 +6,18 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-24
+
+自 v0.9.0 以来的改动：CI 发布流水线修复。
+
+### Fixed
+
+- **CI Node 版本升级**：`ci.yml` 和 `publish.yml` 的 `node-version` 从 18 升到 22。Node 18 不展开 `node --test "dist/__tests__/*.test.js"` 的 glob 模式，导致 CI 报 "Could not find .../*.test.js"。该问题在 v0.9.0 之前就存在（旧 ci.yml 仅在 PR 触发，直接 push master 从未在 Linux 跑过测试），v0.9.0 引入 publish workflow 时暴露。
+
+### Added
+
+- **tag 触发的 npm publish workflow**（`.github/workflows/publish.yml`）：推送 `v*` 格式 tag 时自动跑 `npm ci` → `lint` → `test` → `npm publish --access public`，用 GitHub Secret `NPM_TOKEN` 鉴权。
+
 ## [0.9.0] - 2026-07-24
 
 自 v0.8.0 以来的改动：路由表外置化 + 死代码清理。
