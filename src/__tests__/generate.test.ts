@@ -777,16 +777,22 @@ describe("generatePlatform integration", () => {
     // Should use ralph-graph template (backward compatible naming)
     assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
     assert.ok(content.includes("路由表"), "should contain routing table section");
-    assert.ok(content.includes(`"entry_points"`), "should contain entry_points in routing table");
-    assert.ok(
-      content.includes(`"topological_order"`),
-      "should contain topological_order in routing table",
-    );
     assert.ok(content.includes("active_set"), "should contain active_set in state schema");
+    // 路由表已外置到 .loop-cli/routing-tables/default.json，不在 markdown 内注入
+    const routingTablePath = join(tmpDir, ".loop-cli", "routing-tables", "default.json");
+    assert.ok(existsSync(routingTablePath), "should write external routing table JSON");
+    const table = JSON.parse(readFileSync(routingTablePath, "utf-8"));
+    assert.ok(Array.isArray(table.entry_points), "routing table should have entry_points");
+    assert.ok(table.entry_points.includes("t1"), "entry_points should include t1");
+    assert.ok(Array.isArray(table.topological_order), "routing table should have topological_order");
+    assert.equal(table.topological_order.length, 4, "topological_order should cover all 4 tasks");
+    assert.deepEqual(table.nodes.t1.depends_on, [], "t1 depends_on should be empty");
+    assert.deepEqual(table.nodes.t4.depends_on, ["t2", "t3"], "t4 depends_on should be [t2,t3]");
   });
 
   it("builtin graph domain generates dynamic DAG command (no static tasks)", () => {
-    // 内置 graph 领域无 tasks，走动态模式：命令文件含动态分解指令，不含静态路由表 JSON。
+    // 内置 graph 领域无 tasks，走动态模式：运行时由 orchestrator 按 $ARGUMENTS 分解，
+    // 生成时不写静态路由表文件。
     const result = generatePlatform("claude", { domain: "graph" });
     assert.equal(result.commands, 1, "should generate exactly 1 command");
     const commandDir = join(tmpDir, ".claude", "commands");
@@ -794,18 +800,18 @@ describe("generatePlatform integration", () => {
     assert.ok(commandFiles.includes("ralph-graph.md"), "should generate ralph-graph.md command");
     const content = readFileSync(join(commandDir, "ralph-graph.md"), "utf-8");
     assert.ok(content.includes("Ralph Graph"), "should contain Ralph Graph heading");
-    // 动态模式特征：含动态分解指令，不含静态 entry_points JSON
-    assert.ok(content.includes("动态模式"), "should contain dynamic mode instruction");
-    assert.ok(!content.includes(`"entry_points"`), "should NOT contain static routing table");
     // 内置 graph 领域拥有独立三角色 graph-orchestrator / graph-worker / graph-reviewer
     assert.ok(
       content.includes("graph-worker"),
       "should reference graph-worker for delegation (independent graph domain)",
     );
+    // 动态模式：不生成外置路由表文件
+    const routingTablePath = join(tmpDir, ".loop-cli", "routing-tables", "default.json");
+    assert.ok(!existsSync(routingTablePath), "should NOT write routing table in dynamic mode");
   });
 
   it("graph domain with --tasks-file generates static routing table", () => {
-    // --tasks-file 注入外部 DAG，走静态路由表模式。
+    // --tasks-file 注入外部 DAG，生成时外置静态路由表文件。
     const tasksFile = join(tmpDir, "my-tasks.json");
     writeFileSync(
       tasksFile,
@@ -816,12 +822,14 @@ describe("generatePlatform integration", () => {
     );
     const result = generatePlatform("claude", { domain: "graph", tasksFile });
     assert.equal(result.commands, 1);
-    const content = readFileSync(join(tmpDir, ".claude", "commands", "ralph-graph.md"), "utf-8");
-    assert.ok(content.includes(`"entry_points"`), "should contain static entry_points");
-    assert.ok(content.includes(`"topological_order"`), "should contain topological_order");
-    assert.ok(content.includes('"a"'), "should contain task a in routing table");
-    assert.ok(content.includes('"b"'), "should contain task b in routing table");
-    assert.ok(!content.includes("动态模式"), "should NOT contain dynamic mode when tasks-file present");
+    // 路由表已外置到 .loop-cli/routing-tables/default.json
+    const routingTablePath = join(tmpDir, ".loop-cli", "routing-tables", "default.json");
+    assert.ok(existsSync(routingTablePath), "should write external static routing table");
+    const table = JSON.parse(readFileSync(routingTablePath, "utf-8"));
+    assert.ok(table.entry_points.includes("a"), "entry_points should include a");
+    assert.deepEqual(table.topological_order, ["a", "b"], "topological_order should be [a, b]");
+    assert.deepEqual(table.nodes.a, { title: "Task A", depends_on: [], accept_criteria: [] });
+    assert.deepEqual(table.nodes.b, { title: "Task B", depends_on: ["a"], accept_criteria: [] });
   });
 
   it("builtin domains do not emit fallback warnings (expected reuse)", () => {

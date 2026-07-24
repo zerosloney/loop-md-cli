@@ -27,5 +27,8 @@ AGENTS.md
 # loop-cli runtime state (per-developer, not shared)
 .loop-cli/state/
 
+# loop-cli generated routing tables (per-developer, not shared)
+.loop-cli/routing-tables/
+
 # Generated docs (fetched from external sources)
 docs/

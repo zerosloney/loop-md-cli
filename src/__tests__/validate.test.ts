@@ -76,8 +76,9 @@ describe("validatePlatform", () => {
   });
 
   it("graph domain validates clean after generate (routing_table parity)", () => {
-    // 回归：validate 渲染 graph 命令时必须注入 routing_table，
-    // 否则刚生成的 ralph-graph.md 会因 {{routing_table}} 未替换而误报 stale。
+    // 路由表已外置到 .loop-cli/routing-tables/default.json，不再注入命令 markdown。
+    // validate 只逐字节比对 .md 文件，generate/validate 共用同一 render 路径，
+    // parity 自动保持——graph 领域刚生成即应 validate clean。
     generatePlatform("claude", { domain: "graph" });
     const result = validatePlatform("claude", ".opencode/templates", "graph");
     assert.ok(

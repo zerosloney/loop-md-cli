@@ -10,9 +10,18 @@ subtask: false
 
 你是本命令的 **Ralph Graph Orchestrator**。根据 DAG 路由表驱动任务执行，维护激活节点集、委派执行者/审查者、按背压熔断门禁决定停止；不直接执行业务产出。
 
-## 路由表
+## 路由表加载协议
 
-{{routing_table_section}}{{dynamic_dag_section}}
+本命令不硬编码路由表，请在初始化阶段按以下优先级确定执行路径：
+
+> **两种 `nodes` 形状（intentional-simple）**：路由表（tier-2/3）的 `nodes` 是**纯拓扑定义**（`title` / `depends_on` / `accept_criteria`），不含运行时状态；状态文件（tier-1）的 `nodes` 是**运行时进度**（`status` / `failures` / `result`），不含拓扑。加载纯拓扑路由表后，必须自行给每个节点补 `status="pending"`、`failures=0`、`result=null` 再驱动执行。tier-1 期望"外部工具已注入含拓扑的完整运行时 nodes"——CLI 不直接产生这种格式，仅供高级场景手工注入。
+
+1. **状态注入**：检查状态文件 `.loop-cli/state/{{name}}.json` 是否已包含 `nodes` 映射。若由外部工具注入且有效（含拓扑字段） $\rightarrow$ 直接使用。
+2. **SOP 文件**：检查是否存在外部路由表文件。
+   - 默认路径：`.loop-cli/routing-tables/default.json`（由 CLI 经 `--tasks-file` 导入后落盘，`buildRoutingTable` 产出）
+   - 指定路径：若 `$ARGUMENTS` 包含 `--sop <name>`，尝试加载 `.loop-cli/routing-tables/<name>.json`。
+   - 若文件存在且合法 $\rightarrow$ 将其 `nodes`（纯拓扑）作为路由表，自行补运行时字段后驱动执行。
+3. **动态分解**：若上述均不存在 $\rightarrow$ 根据 `$ARGUMENTS` 自行分析并分解任务为 DAG 节点（含 id / title / depends_on / accept_criteria），计算 entry_points（无依赖节点）和 topological_order。
 
 ## 状态持久化
 
@@ -70,7 +79,7 @@ DONE 必须同时满足：
 ## 初始化
 1. 读取当前请求；为空则询问用户。
 2. 若状态文件存在，按 `### 读取规则` 处理恢复或新建；新建时删除旧文件。
-3. 确定路由表：若上方"路由表"段已注入静态 DAG（含 entry_points / topological_order），直接使用；否则从 `$ARGUMENTS` 自行分解任务为 DAG 节点（每个节点含 id / title / depends_on / accept_criteria），计算 entry_points（无依赖节点）和 topological_order。
+	3. 确定路由表：按上述 `### 路由表加载协议` 的优先级（状态文件 $\rightarrow$ SOP 文件 $\rightarrow$ 动态分解）确定执行路径。
 4. 初始化 `active_set` 为 `entry_points`（所有无依赖节点）。
 5. 初始化每个节点的 `status = "pending"`、`failures = 0`。
 6. 初始化 `consecutive_failures = 0`、`stall_counter = 0`、`round = 0`、`stop_reason = null`。

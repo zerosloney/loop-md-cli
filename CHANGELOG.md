@@ -6,6 +6,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-24
+
+自 v0.8.0 以来的改动：路由表外置化 + 死代码清理。
+
+### Changed
+
+- **路由表外置**：graph 领域的静态路由表不再注入命令 markdown，改为在生成时落盘到 `.loop-cli/routing-tables/default.json`（与 state/cache 同属项目级 `.loop-cli/` 配置区）。运行时按模板"路由表加载协议"的第二优先级（SOP 文件）读取。`--tasks-file` 导入的外部 DAG 经 `buildRoutingTable` 计算后写入此文件。
+- **删除死代码**：移除从未被调用的 `fillGraphDagSections` helper（v0.8.0 重构遗留）。连带清理 `renderCommandWithTemplates` 的 `tasks?` 参数和 `renderDomainFiles` 的 `tasksOverride?` 参数（孤儿参数）。
+- `validate.ts` 不再解析 `tasksFile`（路由表已外置，validate 只逐字节比对 `.md` 文件，parity 自动保持）。`validatePlatform` 的 `tasksFile` 参数保留为 `_tasksFile` 以维持公共签名兼容。
+
+### Added
+
+- **schema 形状文档化**：模板"路由表加载协议"新增 `intentional-simple` 说明，明确区分两种 `nodes` 形状——路由表（tier-2/3）为纯拓扑定义（title/depends_on/accept_criteria），状态文件（tier-1）为运行时进度（status/failures/result）。加载纯拓扑路由表后 orchestrator 需自行补运行时字段。
+
+### Fixed
+
+- 修复 v0.8.0 的 `--tasks-file` 实际无效问题（`fillGraphDagSections` 从未被调用，导致注入的 tasks 被静默丢弃）。
+
 ## [0.8.0] - 2026-07-24
 
 自 v0.7.0 以来的改动：graph 引擎动态 DAG —— 单模板自动切换静态/动态双模式。

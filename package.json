@@ -1,6 +1,6 @@
 {
   "name": "@master0071/loop-md-cli",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "从单一源生成多平台 AI 编码 agent/command 配置的脚手架（Code-Loop / Test-Loop / Writing-Loop / Ralph-Loop）。",
   "license": "MIT",
   "author": "dc <574635594@qq.com>",

@@ -114,35 +114,8 @@ export function renderAgentWithTemplates(
 }
 
 /**
- * 填充 graph 引擎的双分支变量（静态路由表 / 动态分解）。
- * generatePlatform 和 renderCommandWithTemplates 共用此逻辑，保证写盘与 validate 比对一致。
- * @param vars 模板变量 map（原地修改）
- * @param tasks 有效的 tasks（领域声明或 --tasks-file 注入）；空/undefined 走动态分支
+ * 内部：用预加载模板渲染 command，供 validate.ts 复用避免重复读盘。
  */
-function fillGraphDagSections(vars: Record<string, string>, tasks?: TaskDefinition[]): void {
-  if (tasks && tasks.length > 0) {
-    const table = buildRoutingTable(tasks);
-    vars.routing_table = table;
-    vars.routing_table_section =
-      `本领域已预定义 DAG 拓扑，路由表如下（由 CLI 在生成时计算）：\n\n` +
-      "```json\n" + table + "\n```\n\n" +
-      "- **entry_points**: 拓扑入口节点（无依赖，可立即执行）。\n" +
-      "- **topological_order**: 拓扑排序，用于确定激活节点集的推进方向。\n" +
-      "- 每个节点记录 `depends_on`（前置依赖）和 `accept_criteria`（验收标准）。";
-    vars.dynamic_dag_section = "";
-  } else {
-    vars.routing_table_section = "";
-    vars.dynamic_dag_section =
-      "本命令未预定义静态路由表（动态模式）。请在初始化阶段从 `$ARGUMENTS` 自行分解任务为 DAG 节点：\n\n" +
-      "1. 将请求拆解为若干任务节点，每个节点含 `id`（如 t1/t2）、`title`、`depends_on`（前置节点 id 数组）、`accept_criteria`（验收标准数组）。\n" +
-      "2. 识别无依赖的节点作为 `entry_points`。\n" +
-      "3. 按 depends_on 关系计算 `topological_order`（拓扑排序）。\n" +
-      "4. 将分解结果写入状态文件的 `nodes` 映射，格式与下方状态持久化 schema 一致。\n\n" +
-      "> 分解质量直接影响执行效率：优先识别可并行的独立任务，依赖链尽量短。";
-  }
-}
-
-/** 内部：用预加载模板渲染 command，供 validate.ts 复用避免重复读盘。 */
 export function renderCommandWithTemplates(
   renderer: Renderer,
   platform: Platform,
@@ -152,7 +125,6 @@ export function renderCommandWithTemplates(
   commandTemplates: Record<string, string>,
   domainId?: string,
   engineType?: string,
-  tasks?: TaskDefinition[],
   executorName = "",
   reviewerName = "",
 ): RenderedCommand {
@@ -167,11 +139,6 @@ export function renderCommandWithTemplates(
   // executor_name / reviewer_name 必须与 generatePlatform 写盘路径一致，否则 validate 比对会误报 stale。
   vars.executor_name = executorName;
   vars.reviewer_name = reviewerName;
-  // graph 引擎双分支：有 tasks 走静态路由表，无 tasks 走动态分解。
-  // 必须与 renderDomainFiles 写盘路径一致，否则 validate 比对会误报 stale。
-  if (effectiveEngineType === "graph") {
-    fillGraphDagSections(vars, tasks);
-  }
   const rendered = renderTemplate(tpl, vars);
   const { frontmatter, body } = parseSource(rendered);
   const src: CommandSource = { name: commandName, description, frontmatter, body };
@@ -428,7 +395,6 @@ function renderDomainFiles(
   renderer: Renderer,
   platform: Platform,
   modelOverrides?: Record<string, string>,
-  tasksOverride?: TaskDefinition[],
 ): { files: Map<string, string>; agents: number; commands: number } {
   const files = new Map<string, string>();
   let agentCount = 0;
@@ -479,10 +445,6 @@ function renderDomainFiles(
     cmdVars.domain = resolvedDomain.id;
     cmdVars.executor_name = executorName;
     cmdVars.reviewer_name = reviewerName;
-    // graph 引擎：有 tasks（领域声明或 --tasks-file 注入）走静态路由表；无 tasks 走动态分解。
-    if (engineType === "graph") {
-      fillGraphDagSections(cmdVars, tasksOverride ?? resolvedDomain.tasks);
-    }
     const rendered = renderTemplate(tpl, cmdVars);
     const { frontmatter, body } = parseSource(rendered);
     const src: CommandSource = { name: c.name, description: c.description, frontmatter, body };
@@ -542,6 +504,13 @@ export function generatePlatform(
   let agentCount = 0;
   let commandCount = 0;
 
+  // 路由表外置：graph 领域若有有效 tasks（领域内置或 --tasks-file 注入），
+  // 生成时把 buildRoutingTable 结果写到 .loop-cli/routing-tables/default.json，
+  // 供运行时按模板"路由表加载协议"的第二优先级（SOP 文件）读取。
+  // intentional-simple: 多 graph 领域共存时 last-write-wins（共享默认 SOP）；
+  // 未来按 --sop <name> 按领域命名可细化，当前 MVP 不做。
+  let routingTableTasks: TaskDefinition[] | undefined;
+
   for (const domainId of effectiveDomainIds) {
     const resolvedDomain = findDomain(resolvedDomainsPool, domainId);
     const rendered = renderDomainFiles(
@@ -551,8 +520,15 @@ export function generatePlatform(
       renderer,
       platform,
       modelOverrides,
-      tasksOverride,
     );
+
+    // graph 领域：收集首个非空 effective tasks 用于外置路由表导出。
+    if (!routingTableTasks && resolvedDomain.engine.type === "graph") {
+      const effectiveTasks = tasksOverride ?? resolvedDomain.tasks;
+      if (effectiveTasks && effectiveTasks.length > 0) {
+        routingTableTasks = effectiveTasks;
+      }
+    }
 
     // 预检：任一目标文件已存在 → 跳过整个领域（不覆盖）。
     // 但仍需把已存在的文件纳入 expectedFiles，避免被孤儿清理删除（保留共存）。
@@ -584,6 +560,9 @@ export function generatePlatform(
     for (const [relPath] of expectedFiles) {
       console.log(`[dry-run] 将写入 ${join(platform.dir, relPath)}`);
     }
+    if (routingTableTasks) {
+      console.log("[dry-run] 将写入 .loop-cli/routing-tables/default.json");
+    }
     return { agents: agentCount, commands: commandCount };
   }
 
@@ -595,6 +574,18 @@ export function generatePlatform(
     throw new Error(`无法创建输出目录 (${platform.dir}): ${(err as Error).message}`, {
       cause: err,
     });
+  }
+
+  // 路由表外置导出：与 state/cache 同属 .loop-cli/（项目级配置区），
+  // 不在 manifest 管辖范围内，不会被孤儿清理误删。
+  if (routingTableTasks) {
+    const routingTablesDir = join(cwd, ".loop-cli", "routing-tables");
+    try {
+      mkdirSync(routingTablesDir, { recursive: true });
+      writeAtomic(join(routingTablesDir, "default.json"), buildRoutingTable(routingTableTasks));
+    } catch (err) {
+      throw new Error(`写入路由表失败: ${(err as Error).message}`, { cause: err });
+    }
   }
 
   // ── 增量模式 ──
